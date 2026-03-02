@@ -6,8 +6,22 @@
 import { useState, useEffect } from 'react';
 import type { MouseEvent, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Fuel, Gauge, Calendar, MapPin, ChevronRight, Car, DollarSign, Droplets } from 'lucide-react';
+import { Plus, Trash2, Fuel, Gauge, Calendar, MapPin, Car } from 'lucide-react';
 import { Vehicle, Log } from './types';
+
+// Firebase 相關匯入
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  query, 
+  orderBy, 
+  deleteDoc, 
+  doc, 
+  updateDoc,
+  serverTimestamp 
+} from "firebase/firestore";
+import { db } from "./lib/firebase";
 
 export default function App() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -29,10 +43,15 @@ export default function App() {
     }
   }, [selectedVehicle]);
 
+  // --- Firebase 邏輯：獲取所有車輛 ---
   const fetchVehicles = async () => {
     try {
-      const res = await fetch('/api/vehicles');
-      const data = await res.json();
+      const q = query(collection(db, "vehicles"), orderBy("created_at", "desc"));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
       setVehicles(data);
       setLoading(false);
     } catch (err) {
@@ -41,22 +60,31 @@ export default function App() {
     }
   };
 
-  const fetchLogs = async (vehicleId: number) => {
+  // --- Firebase 邏輯：獲取特定車輛的紀錄 ---
+  const fetchLogs = async (vehicleId: string) => {
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}/logs`);
-      const data = await res.json();
+      const q = query(
+        collection(db, "vehicles", vehicleId, "logs"), 
+        orderBy("date", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
       setLogs(data);
     } catch (err) {
       console.error('Failed to fetch logs', err);
     }
   };
 
-  const handleDeleteVehicle = async (e: MouseEvent, id: number) => {
+  // --- Firebase 邏輯：刪除車輛 ---
+  const handleDeleteVehicle = async (e: MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this vehicle? All logs will be lost.')) return;
+    if (!confirm('確定要刪除此車輛嗎？所有相關紀錄將無法找回。')) return;
     
     try {
-      await fetch(`/api/vehicles/${id}`, { method: 'DELETE' });
+      await deleteDoc(doc(db, "vehicles", id));
       if (selectedVehicle?.id === id) setSelectedVehicle(null);
       fetchVehicles();
     } catch (err) {
@@ -70,7 +98,7 @@ export default function App() {
         <header className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">車輛管理系統</h1>
-            <p className="text-slate-500 mt-1">Vehicle Management System</p>
+            <p className="text-slate-500 mt-1">Firebase Cloud Sync</p>
           </div>
           {!selectedVehicle && (
             <button
@@ -92,7 +120,7 @@ export default function App() {
               </div>
               <div className="divide-y divide-slate-100">
                 {loading ? (
-                  <div className="p-8 text-center text-slate-400">Loading...</div>
+                  <div className="p-8 text-center text-slate-400">載入中...</div>
                 ) : vehicles.length === 0 ? (
                   <div className="p-8 text-center text-slate-400">
                     <Car className="mx-auto mb-2 opacity-50" size={32} />
@@ -123,7 +151,7 @@ export default function App() {
                       </div>
                       <div className="mt-3 flex items-center gap-2 text-xs font-mono text-slate-500 bg-slate-100 w-fit px-2 py-1 rounded-md">
                         <Gauge size={12} />
-                        {vehicle.current_odometer?.toLocaleString()} km
+                        {(vehicle.current_odometer || 0).toLocaleString()} km
                       </div>
                     </div>
                   ))
@@ -168,7 +196,7 @@ export default function App() {
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">目前里程</p>
                       <p className="text-xl font-mono font-semibold text-slate-800">
-                        {selectedVehicle.current_odometer?.toLocaleString()}
+                        {(selectedVehicle.current_odometer || 0).toLocaleString()}
                         <span className="text-xs text-slate-400 ml-1">km</span>
                       </p>
                     </div>
@@ -213,7 +241,7 @@ export default function App() {
                                     <Calendar size={14} />
                                     {log.date}
                                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                    <span className="font-mono">{log.odometer.toLocaleString()} km</span>
+                                    <span className="font-mono">{(log.odometer || 0).toLocaleString()} km</span>
                                   </p>
                                 </div>
                                 {log.total_cost && (
@@ -307,10 +335,11 @@ function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSucces
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await fetch('/api/vehicles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+      // --- Firebase 邏輯：新增車輛文件 ---
+      await addDoc(collection(db, "vehicles"), {
+        ...formData,
+        current_odometer: formData.initial_mileage,
+        created_at: serverTimestamp()
       });
       onSuccess();
     } catch (err) {
@@ -336,7 +365,7 @@ function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSucces
             <input 
               required
               type="text" 
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               placeholder="例如：小白, 上班用車"
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
@@ -385,19 +414,8 @@ function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSucces
             </div>
           </div>
           <div className="pt-4 flex gap-3">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors"
-            >
-              取消
-            </button>
-            <button 
-              type="submit"
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              建立車輛
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors">取消</button>
+            <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">建立車輛</button>
           </div>
         </form>
       </motion.div>
@@ -405,7 +423,7 @@ function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSucces
   );
 }
 
-function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClose: () => void, onSuccess: () => void }) {
+function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: () => void, onSuccess: () => void }) {
   const [type, setType] = useState<'refuel' | 'mileage' | 'service'>('refuel');
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -417,7 +435,6 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClos
     notes: ''
   });
 
-  // Auto-calculate total cost if liters and price are present
   useEffect(() => {
     if (formData.liters && formData.price_per_liter) {
       const total = parseFloat(formData.liters) * parseFloat(formData.price_per_liter);
@@ -428,18 +445,28 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClos
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await fetch(`/api/vehicles/${vehicle.id}/logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          type,
-          odometer: Number(formData.odometer),
-          liters: formData.liters ? Number(formData.liters) : null,
-          price_per_liter: formData.price_per_liter ? Number(formData.price_per_liter) : null,
-          total_cost: formData.total_cost ? Number(formData.total_cost) : null,
-        })
+      const odometerValue = Number(formData.odometer);
+      
+      // --- Firebase 邏輯：新增紀錄到子集合 ---
+      await addDoc(collection(db, "vehicles", vehicle.id, "logs"), {
+        type,
+        date: formData.date,
+        odometer: odometerValue,
+        liters: formData.liters ? Number(formData.liters) : null,
+        price_per_liter: formData.price_per_liter ? Number(formData.price_per_liter) : null,
+        total_cost: formData.total_cost ? Number(formData.total_cost) : null,
+        location: formData.location,
+        notes: formData.notes,
+        created_at: serverTimestamp()
       });
+
+      // --- Firebase 邏輯：同步更新車輛的目前里程 ---
+      if (odometerValue > (vehicle.current_odometer || 0)) {
+        await updateDoc(doc(db, "vehicles", vehicle.id), {
+          current_odometer: odometerValue
+        });
+      }
+
       onSuccess();
     } catch (err) {
       console.error(err);
@@ -478,23 +505,11 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClos
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">日期 *</label>
-                <input 
-                  required
-                  type="date" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={formData.date}
-                  onChange={e => setFormData({...formData, date: e.target.value})}
-                />
+                <input required type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">目前里程 (km) *</label>
-                <input 
-                  required
-                  type="number" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={formData.odometer}
-                  onChange={e => setFormData({...formData, odometer: e.target.value})}
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">里程 (km) *</label>
+                <input required type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.odometer} onChange={e => setFormData({...formData, odometer: e.target.value})} />
               </div>
             </div>
 
@@ -502,84 +517,37 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClos
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">油量 (公升)</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={formData.liters}
-                      onChange={e => setFormData({...formData, liters: e.target.value})}
-                    />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">油量 (L)</label>
+                    <input type="number" step="0.01" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.liters} onChange={e => setFormData({...formData, liters: e.target.value})} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">單價 ($/L)</label>
-                    <input 
-                      type="number" 
-                      step="0.1"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={formData.price_per_liter}
-                      onChange={e => setFormData({...formData, price_per_liter: e.target.value})}
-                    />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">單價</label>
+                    <input type="number" step="0.1" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.price_per_liter} onChange={e => setFormData({...formData, price_per_liter: e.target.value})} />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">總金額 ($)</label>
-                  <input 
-                    type="number" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800"
-                    value={formData.total_cost}
-                    onChange={e => setFormData({...formData, total_cost: e.target.value})}
-                  />
+                  <input type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
                 </div>
               </>
             )}
 
             {type === 'service' && (
-               <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">總金額 ($)</label>
-                  <input 
-                    type="number" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={formData.total_cost}
-                    onChange={e => setFormData({...formData, total_cost: e.target.value})}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">維修總額 ($)</label>
+                <input type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
+              </div>
             )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">地點 / 備註</label>
-              <div className="grid grid-cols-1 gap-2">
-                <input 
-                  type="text" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="地點 (例如: 中油台北站)"
-                  value={formData.location}
-                  onChange={e => setFormData({...formData, location: e.target.value})}
-                />
-                <textarea 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="備註事項..."
-                  rows={2}
-                  value={formData.notes}
-                  onChange={e => setFormData({...formData, notes: e.target.value})}
-                />
-              </div>
+              <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-2 outline-none" placeholder="地點 (例如: 中油)" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+              <textarea className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" placeholder="備註..." rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
             </div>
 
             <div className="pt-4 flex gap-3">
-              <button 
-                type="button" 
-                onClick={onClose}
-                className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors"
-              >
-                取消
-              </button>
-              <button 
-                type="submit"
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-              >
-                儲存紀錄
-              </button>
+              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors">取消</button>
+              <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 shadow-sm">儲存紀錄</button>
             </div>
           </form>
         </div>
