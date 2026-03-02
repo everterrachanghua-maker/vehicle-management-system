@@ -6,8 +6,7 @@
 import { useState, useEffect } from 'react';
 import type { MouseEvent, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Fuel, Gauge, Calendar, MapPin, Car } from 'lucide-react';
-import { Vehicle, Log } from './types';
+import { Plus, Trash2, Fuel, Gauge, Calendar, MapPin, Car, ChevronRight } from 'lucide-react';
 
 // Firebase 相關匯入
 import { 
@@ -23,6 +22,29 @@ import {
 } from "firebase/firestore";
 import { db } from "./lib/firebase";
 
+// 定義類型 (為了讓編碼更穩定)
+export interface Vehicle {
+  id: string;
+  name: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  initial_mileage: number;
+  current_odometer: number;
+}
+
+export interface Log {
+  id: string;
+  type: 'refuel' | 'mileage' | 'service';
+  date: string;
+  odometer: number;
+  liters?: number | null;
+  price_per_liter?: number | null;
+  total_cost?: number | null;
+  location?: string;
+  notes?: string;
+}
+
 export default function App() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -31,27 +53,27 @@ export default function App() {
   const [showAddLog, setShowAddLog] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Fetch vehicles on mount
+  // 初始化讀取
   useEffect(() => {
     fetchVehicles();
   }, []);
 
-  // Fetch logs when vehicle is selected
+  // 當選擇車輛後，讀取該車紀錄
   useEffect(() => {
     if (selectedVehicle) {
       fetchLogs(selectedVehicle.id);
     }
   }, [selectedVehicle]);
 
-  // --- Firebase 邏輯：獲取所有車輛 ---
+  // --- Firebase 獲取所有車輛 ---
   const fetchVehicles = async () => {
     try {
       const q = query(collection(db, "vehicles"), orderBy("created_at", "desc"));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
+      const snap = await getDocs(q);
+      const data = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as any[];
+      })) as Vehicle[];
       setVehicles(data);
       setLoading(false);
     } catch (err) {
@@ -60,35 +82,34 @@ export default function App() {
     }
   };
 
-  // --- Firebase 邏輯：獲取特定車輛的紀錄 ---
+  // --- Firebase 獲取特定車輛紀錄 ---
   const fetchLogs = async (vehicleId: string) => {
     try {
       const q = query(
         collection(db, "vehicles", vehicleId, "logs"), 
         orderBy("date", "desc")
       );
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
+      const snap = await getDocs(q);
+      const data = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as any[];
+      })) as Log[];
       setLogs(data);
     } catch (err) {
       console.error('Failed to fetch logs', err);
     }
   };
 
-  // --- Firebase 邏輯：刪除車輛 ---
+  // --- Firebase 刪除車輛 ---
   const handleDeleteVehicle = async (e: MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm('確定要刪除此車輛嗎？所有相關紀錄將無法找回。')) return;
-    
+    if (!confirm('確定要刪除這台車嗎？所有相關紀錄將無法找回。')) return;
     try {
       await deleteDoc(doc(db, "vehicles", id));
       if (selectedVehicle?.id === id) setSelectedVehicle(null);
       fetchVehicles();
     } catch (err) {
-      console.error('Failed to delete vehicle', err);
+      console.error('Failed to delete', err);
     }
   };
 
@@ -97,8 +118,11 @@ export default function App() {
       <div className="max-w-5xl mx-auto p-4 md:p-8">
         <header className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">車輛管理系統</h1>
-            <p className="text-slate-500 mt-1">Firebase Cloud Sync</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">車輛管理系統</h1>
+            <p className="text-slate-500 mt-1 flex items-center gap-2">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+              Firebase Cloud Sync
+            </p>
           </div>
           {!selectedVehicle && (
             <button
@@ -112,7 +136,7 @@ export default function App() {
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* Sidebar / Vehicle List */}
+          {/* 列表側欄 */}
           <div className={`md:col-span-4 ${selectedVehicle ? 'hidden md:block' : 'block'}`}>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -139,7 +163,7 @@ export default function App() {
                         <div>
                           <h3 className="font-bold text-slate-800">{vehicle.name}</h3>
                           <p className="text-sm text-slate-500 mt-0.5">
-                            {vehicle.make} {vehicle.model} {vehicle.year}
+                            {vehicle.make} {vehicle.model}
                           </p>
                         </div>
                         <button
@@ -160,21 +184,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Main Content / Details */}
+          {/* 主要詳情內容 */}
           <div className={`md:col-span-8 ${!selectedVehicle ? 'hidden md:block' : 'block'}`}>
             {selectedVehicle ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                key={selectedVehicle.id}
-              >
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={selectedVehicle.id}>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <button 
-                        onClick={() => setSelectedVehicle(null)}
-                        className="md:hidden text-sm text-slate-500 mb-2 flex items-center gap-1"
-                      >
+                      <button onClick={() => setSelectedVehicle(null)} className="md:hidden text-sm text-indigo-600 mb-2 flex items-center gap-1">
                         ← 返回列表
                       </button>
                       <h2 className="text-2xl font-bold text-slate-900">{selectedVehicle.name}</h2>
@@ -185,14 +202,14 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => setShowAddLog(true)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 shadow-sm transition-colors"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 shadow-sm"
                     >
                       <Plus size={18} />
                       <span>新增紀錄</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">目前里程</p>
                       <p className="text-xl font-mono font-semibold text-slate-800">
@@ -208,14 +225,12 @@ export default function App() {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="font-semibold text-slate-700">歷史紀錄</h3>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {logs.length === 0 ? (
-                      <div className="p-12 text-center text-slate-400">
-                        <p>尚無紀錄，請點擊「新增紀錄」開始追蹤。</p>
-                      </div>
+                      <div className="p-12 text-center text-slate-300 italic">尚無紀錄</div>
                     ) : (
                       logs.map(log => (
                         <div key={log.id} className="p-4 hover:bg-slate-50 transition-colors">
@@ -233,43 +248,25 @@ export default function App() {
                               <div className="flex justify-between items-start">
                                 <div>
                                   <p className="font-medium text-slate-900">
-                                    {log.type === 'refuel' ? '加油' : 
-                                     log.type === 'service' ? '維修保養' : 
-                                     '里程紀錄'}
+                                    {log.type === 'refuel' ? '加油' : log.type === 'service' ? '維修保養' : '里程紀錄'}
                                   </p>
                                   <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
-                                    <Calendar size={14} />
-                                    {log.date}
+                                    <Calendar size={14} /> {log.date}
                                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                    <span className="font-mono">{(log.odometer || 0).toLocaleString()} km</span>
+                                    <span className="font-mono">{log.odometer.toLocaleString()} km</span>
                                   </p>
                                 </div>
                                 {log.total_cost && (
                                   <div className="text-right">
-                                    <p className="font-mono font-medium text-slate-900">
-                                      ${log.total_cost.toLocaleString()}
-                                    </p>
-                                    {log.liters && (
-                                      <p className="text-xs text-slate-500 font-mono">
-                                        {log.liters}L @ ${log.price_per_liter}/L
-                                      </p>
-                                    )}
+                                    <p className="font-mono font-medium text-slate-900">${log.total_cost.toLocaleString()}</p>
+                                    {log.liters && <p className="text-xs text-slate-500 font-mono">{log.liters}L @ ${log.price_per_liter}/L</p>}
                                   </div>
                                 )}
                               </div>
                               {(log.location || log.notes) && (
                                 <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-3 text-sm text-slate-600">
-                                  {log.location && (
-                                    <span className="flex items-center gap-1">
-                                      <MapPin size={14} className="text-slate-400" />
-                                      {log.location}
-                                    </span>
-                                  )}
-                                  {log.notes && (
-                                    <span className="text-slate-500 italic">
-                                      "{log.notes}"
-                                    </span>
-                                  )}
+                                  {log.location && <span className="flex items-center gap-1"><MapPin size={14} className="text-slate-400" />{log.location}</span>}
+                                  {log.notes && <span className="text-slate-500 italic">"{log.notes}"</span>}
                                 </div>
                               )}
                             </div>
@@ -281,7 +278,7 @@ export default function App() {
                 </div>
               </motion.div>
             ) : (
-              <div className="hidden md:flex h-full min-h-[400px] items-center justify-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-300">
+              <div className="hidden md:flex h-full min-h-[400px] items-center justify-center text-slate-300 bg-slate-50/50 rounded-2xl border border-dashed border-slate-300">
                 <div className="text-center">
                   <Car className="mx-auto mb-4 opacity-20" size={64} />
                   <p>請選擇左側車輛查看詳情</p>
@@ -292,30 +289,23 @@ export default function App() {
         </div>
       </div>
 
-      {/* Add Vehicle Modal */}
+      {/* 新增車輛彈窗 */}
       <AnimatePresence>
         {showAddVehicle && (
           <AddVehicleModal 
             onClose={() => setShowAddVehicle(false)} 
-            onSuccess={() => {
-              setShowAddVehicle(false);
-              fetchVehicles();
-            }} 
+            onSuccess={() => { setShowAddVehicle(false); fetchVehicles(); }} 
           />
         )}
       </AnimatePresence>
 
-      {/* Add Log Modal */}
+      {/* 新增紀錄彈窗 */}
       <AnimatePresence>
         {showAddLog && selectedVehicle && (
           <AddLogModal 
             vehicle={selectedVehicle}
             onClose={() => setShowAddLog(false)} 
-            onSuccess={() => {
-              setShowAddLog(false);
-              fetchLogs(selectedVehicle.id);
-              fetchVehicles(); // Update odometer in list
-            }} 
+            onSuccess={() => { setShowAddLog(false); fetchLogs(selectedVehicle.id); fetchVehicles(); }} 
           />
         )}
       </AnimatePresence>
@@ -323,99 +313,57 @@ export default function App() {
   );
 }
 
+// 子組件：新增車輛
 function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    make: '',
-    model: '',
-    year: new Date().getFullYear(),
-    initial_mileage: 0
-  });
+  const [formData, setFormData] = useState({ name: '', make: '', model: '', year: new Date().getFullYear(), initial_mileage: 0 });
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      // --- Firebase 邏輯：新增車輛文件 ---
       await addDoc(collection(db, "vehicles"), {
         ...formData,
         current_odometer: formData.initial_mileage,
         created_at: serverTimestamp()
       });
       onSuccess();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
-      >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-slate-900">新增車輛</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="p-6 border-b flex justify-between items-center">
+          <h3 className="text-lg font-bold">新增車輛</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">車輛暱稱 *</label>
-            <input 
-              required
-              type="text" 
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="例如：小白, 上班用車"
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-            />
+            <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">廠牌</label>
-              <input 
-                type="text" 
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                placeholder="Toyota"
-                value={formData.make}
-                onChange={e => setFormData({...formData, make: e.target.value})}
-              />
+              <input type="text" className="w-full px-3 py-2 border rounded-lg" value={formData.make} onChange={e => setFormData({...formData, make: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">型號</label>
-              <input 
-                type="text" 
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                placeholder="Altis"
-                value={formData.model}
-                onChange={e => setFormData({...formData, model: e.target.value})}
-              />
+              <input type="text" className="w-full px-3 py-2 border rounded-lg" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">年份</label>
-              <input 
-                type="number" 
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={formData.year}
-                onChange={e => setFormData({...formData, year: parseInt(e.target.value)})}
-              />
+              <input type="number" className="w-full px-3 py-2 border rounded-lg" value={formData.year} onChange={e => setFormData({...formData, year: parseInt(e.target.value)})} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">初始里程 (km)</label>
-              <input 
-                type="number" 
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={formData.initial_mileage}
-                onChange={e => setFormData({...formData, initial_mileage: parseInt(e.target.value)})}
-              />
+              <input type="number" className="w-full px-3 py-2 border rounded-lg" value={formData.initial_mileage} onChange={e => setFormData({...formData, initial_mileage: parseInt(e.target.value)})} />
             </div>
           </div>
           <div className="pt-4 flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors">取消</button>
-            <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">建立車輛</button>
+            <button type="button" onClick={onClose} className="flex-1 py-2 font-medium">取消</button>
+            <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold">建立</button>
           </div>
         </form>
       </motion.div>
@@ -423,11 +371,12 @@ function AddVehicleModal({ onClose, onSuccess }: { onClose: () => void, onSucces
   );
 }
 
-function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: () => void, onSuccess: () => void }) {
+// 子組件：新增紀錄 (包含三大模式與自動計算)
+function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: Vehicle, onClose: () => void, onSuccess: () => void }) {
   const [type, setType] = useState<'refuel' | 'mileage' | 'service'>('refuel');
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    odometer: vehicle.current_odometer || vehicle.initial_mileage,
+    odometer: vehicle.current_odometer,
     liters: '',
     price_per_liter: '',
     total_cost: '',
@@ -435,23 +384,23 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: (
     notes: ''
   });
 
+  // 自動計算總金額
   useEffect(() => {
-    if (formData.liters && formData.price_per_liter) {
+    if (type === 'refuel' && formData.liters && formData.price_per_liter) {
       const total = parseFloat(formData.liters) * parseFloat(formData.price_per_liter);
       setFormData(prev => ({ ...prev, total_cost: Math.round(total).toString() }));
     }
-  }, [formData.liters, formData.price_per_liter]);
+  }, [formData.liters, formData.price_per_liter, type]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const odometerValue = Number(formData.odometer);
-      
-      // --- Firebase 邏輯：新增紀錄到子集合 ---
+      const odo = Number(formData.odometer);
+      // 1. 新增紀錄
       await addDoc(collection(db, "vehicles", vehicle.id, "logs"), {
         type,
         date: formData.date,
-        odometer: odometerValue,
+        odometer: odo,
         liters: formData.liters ? Number(formData.liters) : null,
         price_per_liter: formData.price_per_liter ? Number(formData.price_per_liter) : null,
         total_cost: formData.total_cost ? Number(formData.total_cost) : null,
@@ -460,42 +409,25 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: (
         created_at: serverTimestamp()
       });
 
-      // --- Firebase 邏輯：同步更新車輛的目前里程 ---
-      if (odometerValue > (vehicle.current_odometer || 0)) {
-        await updateDoc(doc(db, "vehicles", vehicle.id), {
-          current_odometer: odometerValue
-        });
+      // 2. 更新車輛目前里程 (若新里程較大)
+      if (odo > vehicle.current_odometer) {
+        await updateDoc(doc(db, "vehicles", vehicle.id), { current_odometer: odo });
       }
-
       onSuccess();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto"
-      >
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-          <h3 className="text-lg font-bold text-slate-900">新增紀錄</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
+          <h3 className="text-lg font-bold">新增紀錄</h3>
+          <button onClick={onClose}>✕</button>
         </div>
-        
-        <div className="p-6 pt-2">
+        <div className="p-6">
           <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-xl">
             {(['refuel', 'mileage', 'service'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setType(t)}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-                  type === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
+              <button key={t} onClick={() => setType(t)} className={`flex-1 py-2 text-sm font-medium rounded-lg ${type === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                 {t === 'refuel' ? '加油' : t === 'mileage' ? '里程' : '維修'}
               </button>
             ))}
@@ -504,12 +436,12 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">日期 *</label>
-                <input required type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                <label className="block text-sm font-medium mb-1">日期 *</label>
+                <input required type="date" className="w-full px-3 py-2 border rounded-lg" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">里程 (km) *</label>
-                <input required type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.odometer} onChange={e => setFormData({...formData, odometer: e.target.value})} />
+                <label className="block text-sm font-medium mb-1">目前里程 *</label>
+                <input required type="number" className="w-full px-3 py-2 border rounded-lg" value={formData.odometer} onChange={e => setFormData({...formData, odometer: Number(e.target.value)})} />
               </div>
             </div>
 
@@ -517,37 +449,37 @@ function AddLogModal({ vehicle, onClose, onSuccess }: { vehicle: any, onClose: (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">油量 (L)</label>
-                    <input type="number" step="0.01" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.liters} onChange={e => setFormData({...formData, liters: e.target.value})} />
+                    <label className="block text-sm font-medium mb-1">油量 (L)</label>
+                    <input type="number" step="0.01" className="w-full px-3 py-2 border rounded-lg" value={formData.liters} onChange={e => setFormData({...formData, liters: e.target.value})} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">單價</label>
-                    <input type="number" step="0.1" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.price_per_liter} onChange={e => setFormData({...formData, price_per_liter: e.target.value})} />
+                    <label className="block text-sm font-medium mb-1">單價</label>
+                    <input type="number" step="0.1" className="w-full px-3 py-2 border rounded-lg" value={formData.price_per_liter} onChange={e => setFormData({...formData, price_per_liter: e.target.value})} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">總金額 ($)</label>
-                  <input type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
+                  <label className="block text-sm font-medium mb-1">總金額 ($)</label>
+                  <input type="number" className="w-full px-3 py-2 border rounded-lg font-bold" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
                 </div>
               </>
             )}
 
-            {type === 'service' && (
+            {(type === 'service') && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">維修總額 ($)</label>
-                <input type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
+                <label className="block text-sm font-medium mb-1">花費金額 ($)</label>
+                <input type="number" className="w-full px-3 py-2 border rounded-lg" value={formData.total_cost} onChange={e => setFormData({...formData, total_cost: e.target.value})} />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">地點 / 備註</label>
-              <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-2 outline-none" placeholder="地點 (例如: 中油)" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-              <textarea className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" placeholder="備註..." rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+              <label className="block text-sm font-medium mb-1">地點 / 備註</label>
+              <input type="text" className="w-full px-3 py-2 border rounded-lg mb-2" placeholder="地點 (如: 中油站)" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+              <textarea className="w-full px-3 py-2 border rounded-lg" placeholder="備註..." rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
             </div>
 
             <div className="pt-4 flex gap-3">
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-slate-700 font-medium hover:bg-slate-50 rounded-lg transition-colors">取消</button>
-              <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 shadow-sm">儲存紀錄</button>
+              <button type="button" onClick={onClose} className="flex-1 py-2">取消</button>
+              <button type="submit" className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold">儲存紀錄</button>
             </div>
           </form>
         </div>
