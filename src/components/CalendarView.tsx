@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, eachDayOfInterval 
+  startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval 
 } from 'date-fns';
-import { zhTW } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, MapPin, User, Clock, MoreHorizontal } from 'lucide-react';
+import { zhTW } from 'date-fns/locale'; // 確保這行正確
+import { 
+  ChevronLeft, ChevronRight, MapPin, User, Clock, 
+  MoreHorizontal, Car // 補齊原本漏掉的 Car 圖標
+} from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,7 +43,8 @@ export default function CalendarView() {
   // 3. 取得特定日期的行程
   const getEventsForDay = (day: Date) => {
     return itineraries.filter(event => {
-      const eventDate = new Date(event.date); // 假設資料庫存 yyyy-mm-dd
+      // 確保 event.date 字串能被正確解析與比較
+      const eventDate = new Date(event.date); 
       return isSameDay(day, eventDate);
     });
   };
@@ -180,6 +184,7 @@ export default function CalendarView() {
   );
 }
 
+// 輔助元件：詳情條目
 function DetailItem({ icon, label, value }: any) {
   return (
     <div className="flex gap-4">
