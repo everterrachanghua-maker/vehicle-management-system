@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-// 修正後的匯入清單，包含 onSnapshot
 import { 
   collection, 
   getDocs, 
@@ -21,7 +20,29 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function VehicleManager() {
+// 輔助函式：記錄操作日誌 (Audit Log)
+const logAudit = async (user: any, action: string, target: string, detail: any, note: string) => {
+  try {
+    await addDoc(collection(db, "audit_logs"), {
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action,
+      target,
+      detail,
+      note,
+      timestamp: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Audit log failed:", err);
+  }
+};
+
+interface VehicleManagerProps {
+  user: any; // 接收當前登入的使用者資訊
+}
+
+export default function VehicleManager({ user }: VehicleManagerProps) {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,7 +52,6 @@ export default function VehicleManager() {
   useEffect(() => {
     const q = query(collection(db, "vehicles"), orderBy("created_at", "desc"));
     
-    // 使用 onSnapshot 監聽資料庫變化
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const vehicleData = snapshot.docs.map(doc => ({ 
         id: doc.id, 
@@ -44,7 +64,6 @@ export default function VehicleManager() {
       setLoading(false);
     });
 
-    // 元件卸載時停止監聽
     return () => unsubscribe();
   }, []);
 
@@ -81,7 +100,7 @@ export default function VehicleManager() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredVehicles.map(vehicle => (
-            <VehicleCard key={vehicle.id} vehicle={vehicle} />
+            <VehicleCard key={vehicle.id} vehicle={vehicle} user={user} />
           ))}
           {filteredVehicles.length === 0 && !loading && (
             <div className="col-span-full p-20 text-center text-slate-300">
@@ -93,21 +112,51 @@ export default function VehicleManager() {
 
       {/* 新增車輛彈窗 */}
       <AnimatePresence>
-        {showModal && <VehicleFormModal onClose={() => setShowModal(false)} />}
+        {showModal && <VehicleFormModal onClose={() => setShowModal(false)} user={user} />}
       </AnimatePresence>
     </div>
   );
 }
 
 // 車輛卡片元件
-function VehicleCard({ vehicle }: { vehicle: any }) {
-  const handleDelete = async () => {
-    if (confirm(`確定要報廢/移除車輛 ${vehicle.name} 嗎？此動作不可逆。`)) {
-      try {
-        await deleteDoc(doc(db, "vehicles", vehicle.id));
-      } catch (err) {
-        console.error("刪除失敗:", err);
-        alert("刪除失敗，請檢查權限");
+function VehicleCard({ vehicle, user }: { vehicle: any, user: any }) {
+  
+  // 更新後的刪除邏輯：包含權限檢查與車牌字串驗證
+  const handleDeleteVehicle = async () => {
+    // 1. 權限檢查
+    if (user.role !== 'admin') {
+      alert("只有管理員可以刪除車輛資料。");
+      return;
+    }
+
+    // 2. 第一次確認
+    const confirmMsg = `確定要刪除 ${vehicle.name} (${vehicle.plate}) 嗎？\n資料刪除後將無法回溯！`;
+    if (confirm(confirmMsg)) {
+      
+      // 3. 第二次輸入車牌確認
+      const input = prompt(`為確保安全，請輸入該車車牌 "${vehicle.plate}" 以執行刪除：`);
+      
+      if (input === vehicle.plate) {
+        try {
+          // 4. 執行刪除
+          await deleteDoc(doc(db, "vehicles", vehicle.id));
+          
+          // 5. 記錄審計日誌
+          await logAudit(
+            user, 
+            'DELETE', 
+            'VEHICLE', 
+            { plate: vehicle.plate, name: vehicle.name }, 
+            "管理員手動報廢車輛"
+          );
+          
+          alert("車輛已成功移除。");
+        } catch (err) {
+          console.error("刪除失敗:", err);
+          alert("刪除失敗，請檢查權限設定");
+        }
+      } else if (input !== null) {
+        alert("車牌輸入錯誤，操作取消。");
       }
     }
   };
@@ -138,7 +187,9 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
             <div className={`w-3 h-3 rounded-full ${statusColors[vehicle.status] || 'bg-slate-400'}`}></div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{statusText[vehicle.status]}</span>
           </div>
-          <button onClick={handleDelete} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+          <button onClick={handleDeleteVehicle} className="text-slate-300 hover:text-red-500 transition-colors">
+            <Trash2 size={16}/>
+          </button>
         </div>
 
         <div className="flex items-center gap-4 mb-6">
@@ -181,7 +232,7 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
 }
 
 // 新增車輛的彈窗表單
-function VehicleFormModal({ onClose }: { onClose: () => void }) {
+function VehicleFormModal({ onClose, user }: { onClose: () => void, user: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     plate: '',
@@ -217,6 +268,10 @@ function VehicleFormModal({ onClose }: { onClose: () => void }) {
         plate: plateUpper,
         created_at: serverTimestamp()
       });
+
+      // 記錄新增行為
+      await logAudit(user, 'CREATE', 'VEHICLE', { plate: plateUpper }, "新增車輛基本資料");
+
       onClose();
     } catch (err) {
       console.error("建立失敗:", err);
