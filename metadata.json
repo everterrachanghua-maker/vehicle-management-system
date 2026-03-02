@@ -1,0 +1,5 @@
+{
+  "name": "Vehicle Management System",
+  "description": "A system to manage vehicles, track mileage, and record refueling logs.",
+  "requestFramePermissions": []
+}
