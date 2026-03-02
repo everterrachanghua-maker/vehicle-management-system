@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   Calendar, Car, BarChart3, Settings, PlusCircle, 
   Menu, Bell, Search, LogOut, ChevronLeft, ChevronRight,
-  Gauge // 1. 新增 Gauge 圖標
+  Gauge, ShieldCheck // 1. 新增 ShieldCheck 圖標
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,12 +12,16 @@ import ItineraryForm from './components/ItineraryForm';
 import VehicleManager from './components/VehicleManager';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsPage from './components/SettingsPage';
-import OdometerModal from './components/OdometerModal'; // 2. 新增 OdometerModal 匯入
+import OdometerModal from './components/OdometerModal';
+import AdminConsole from './components/AdminConsole'; // 2. 新增 AdminConsole 匯入
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showOdoModal, setShowOdoModal] = useState(false); // 3. 新增 Modal 狀態
+  const [showOdoModal, setShowOdoModal] = useState(false);
+  
+  // 3. 使用者狀態與權限角色 (預設 admin)
+  const [user, setUser] = useState({ id: 'u1', name: '浩廷', role: 'admin' });
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
@@ -38,6 +42,7 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
             expanded={sidebarOpen}
           />
+          
           <div className={`py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-widest ${!sidebarOpen && 'text-center'}`}>
             {sidebarOpen ? '快速操作' : '•••'}
           </div>
@@ -55,8 +60,9 @@ export default function App() {
             onClick={() => setActiveTab('add-vehicle')} 
             expanded={sidebarOpen}
           />
+
           <div className={`py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-widest ${!sidebarOpen && 'text-center'}`}>
-            {sidebarOpen ? '分析與設定' : '•••'}
+            {sidebarOpen ? '分析與管理' : '•••'}
           </div>
           <NavItem 
             icon={<BarChart3 size={20} />} 
@@ -65,6 +71,18 @@ export default function App() {
             onClick={() => setActiveTab('analytics')} 
             expanded={sidebarOpen}
           />
+
+          {/* 4. 只有 Admin 或 Dispatcher 可見的管理員控制台 */}
+          {(user.role === 'admin' || user.role === 'dispatcher') && (
+            <NavItem 
+              icon={<ShieldCheck size={20} className="text-rose-400" />} 
+              label="管理員控制台" 
+              active={activeTab === 'admin'} 
+              onClick={() => setActiveTab('admin')} 
+              expanded={sidebarOpen}
+            />
+          )}
+
           <NavItem 
             icon={<Settings size={20} />} 
             label="系統設定" 
@@ -99,6 +117,7 @@ export default function App() {
                 {activeTab === 'add-itinerary' && '新增行程 Itinerary'}
                 {activeTab === 'add-vehicle' && '車輛管理 Vehicles'}
                 {activeTab === 'analytics' && '統計分析 Analytics'}
+                {activeTab === 'admin' && '管理員控制台 Admin Console'}
                 {activeTab === 'settings' && '系統設定 Settings'}
                 </h2>
                 <p className="text-xs text-slate-400 font-medium">Sampling Group Management System v2.0</p>
@@ -106,7 +125,7 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-            {/* 4. 新增的快速里程填報按鈕 */}
+            {/* 快速里程填報按鈕 */}
             <button 
               onClick={() => setShowOdoModal(true)}
               className="bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm"
@@ -130,11 +149,11 @@ export default function App() {
 
             <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-700">浩廷環境</p>
-                <p className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">Admin</p>
+                <p className="text-sm font-bold text-slate-700">{user.name}環境</p>
+                <p className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">{user.role}</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-2xl rotate-3 flex items-center justify-center text-white font-bold shadow-lg">
-                浩
+                {user.name.substring(0, 1)}
               </div>
             </div>
           </div>
@@ -155,21 +174,20 @@ export default function App() {
               {activeTab === 'add-itinerary' && <ItineraryForm onBack={() => setActiveTab('dashboard')} />}
               {activeTab === 'add-vehicle' && <VehicleManager />}
               {activeTab === 'analytics' && <AnalyticsView />}
+              {/* 5. 管理員控制台分頁 */}
+              {activeTab === 'admin' && <AdminConsole currentUser={user} />}
               {activeTab === 'settings' && <SettingsPage />}
             </motion.div>
           </AnimatePresence>
         </section>
       </main>
 
-      {/* 5. 快速里程填報彈窗邏輯 */}
+      {/* 快速里程填報彈窗 */}
       <AnimatePresence>
         {showOdoModal && (
           <OdometerModal 
             onClose={() => setShowOdoModal(false)} 
-            onSuccess={() => {
-              setShowOdoModal(false);
-              // 這裡可以觸發重新讀取資料的邏輯，如果需要的話
-            }} 
+            onSuccess={() => setShowOdoModal(false)} 
           />
         )}
       </AnimatePresence>
