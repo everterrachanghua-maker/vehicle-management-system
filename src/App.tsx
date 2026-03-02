@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import { 
   Calendar, Car, BarChart3, Settings, PlusCircle, 
-  Menu, Bell, Search, LogOut, ChevronLeft, ChevronRight
+  Menu, Bell, Search, LogOut, ChevronLeft, ChevronRight,
+  Gauge // 1. 新增 Gauge 圖標
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// 假設的分頁元件（稍後我們會逐一實作）
+// 分頁元件
 import CalendarView from './components/CalendarView';
 import ItineraryForm from './components/ItineraryForm';
 import VehicleManager from './components/VehicleManager';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsPage from './components/SettingsPage';
+import OdometerModal from './components/OdometerModal'; // 2. 新增 OdometerModal 匯入
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showOdoModal, setShowOdoModal] = useState(false); // 3. 新增 Modal 狀態
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
@@ -47,7 +50,7 @@ export default function App() {
           />
           <NavItem 
             icon={<PlusCircle size={20} className="text-sky-400" />} 
-            label="新增車輛" 
+            label="車輛管理" 
             active={activeTab === 'add-vehicle'} 
             onClick={() => setActiveTab('add-vehicle')} 
             expanded={sidebarOpen}
@@ -102,21 +105,31 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex items-center gap-6">
-            <div className="relative hidden lg:block">
+          <div className="flex items-center gap-4">
+            {/* 4. 新增的快速里程填報按鈕 */}
+            <button 
+              onClick={() => setShowOdoModal(true)}
+              className="bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm"
+            >
+              <Gauge size={18} /> 快速里程填報
+            </button>
+
+            <div className="relative hidden lg:block ml-2">
               <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
               <input 
                 type="text" 
-                placeholder="搜尋行程、車牌、專案..." 
-                className="pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-2xl text-sm w-72 focus:ring-2 ring-indigo-500 transition-all outline-none"
+                placeholder="搜尋行程、車牌..." 
+                className="pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-2xl text-sm w-48 focus:ring-2 ring-indigo-500 transition-all outline-none"
               />
             </div>
+
             <button className="relative text-slate-500 p-2 hover:bg-slate-100 rounded-full transition-colors">
               <Bell size={20} />
               <span className="absolute top-2 right-2 bg-red-500 w-2 h-2 rounded-full border-2 border-white"></span>
             </button>
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
-              <div className="text-right">
+
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-slate-700">浩廷環境</p>
                 <p className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">Admin</p>
               </div>
@@ -147,6 +160,19 @@ export default function App() {
           </AnimatePresence>
         </section>
       </main>
+
+      {/* 5. 快速里程填報彈窗邏輯 */}
+      <AnimatePresence>
+        {showOdoModal && (
+          <OdometerModal 
+            onClose={() => setShowOdoModal(false)} 
+            onSuccess={() => {
+              setShowOdoModal(false);
+              // 這裡可以觸發重新讀取資料的邏輯，如果需要的話
+            }} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
