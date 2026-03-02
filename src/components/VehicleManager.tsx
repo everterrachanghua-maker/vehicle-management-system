@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, addDoc, query, where, serverTimestamp, deleteDoc, doc, updateDoc, orderBy } from "firebase/firestore";
+// 修正後的匯入清單，包含 onSnapshot
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  query, 
+  where, 
+  serverTimestamp, 
+  deleteDoc, 
+  doc, 
+  updateDoc, 
+  orderBy, 
+  onSnapshot 
+} from "firebase/firestore";
 import { 
   Car, Hash, Settings, Users, Fuel, 
   Wrench, ShieldCheck, AlertCircle, Plus, 
@@ -14,13 +27,24 @@ export default function VehicleManager() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // 1. 抓取車輛清單
+  // 1. 抓取車輛清單 (實時同步版本)
   useEffect(() => {
     const q = query(collection(db, "vehicles"), orderBy("created_at", "desc"));
+    
+    // 使用 onSnapshot 監聽資料庫變化
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setVehicles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const vehicleData = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+      setVehicles(vehicleData);
+      setLoading(false);
+    }, (error) => {
+      console.error("監聽失敗:", error);
       setLoading(false);
     });
+
+    // 元件卸載時停止監聽
     return () => unsubscribe();
   }, []);
 
@@ -59,6 +83,11 @@ export default function VehicleManager() {
           {filteredVehicles.map(vehicle => (
             <VehicleCard key={vehicle.id} vehicle={vehicle} />
           ))}
+          {filteredVehicles.length === 0 && !loading && (
+            <div className="col-span-full p-20 text-center text-slate-300">
+              找不到符合條件的車輛
+            </div>
+          )}
         </div>
       )}
 
@@ -74,7 +103,12 @@ export default function VehicleManager() {
 function VehicleCard({ vehicle }: { vehicle: any }) {
   const handleDelete = async () => {
     if (confirm(`確定要報廢/移除車輛 ${vehicle.name} 嗎？此動作不可逆。`)) {
-      await deleteDoc(doc(db, "vehicles", vehicle.id));
+      try {
+        await deleteDoc(doc(db, "vehicles", vehicle.id));
+      } catch (err) {
+        console.error("刪除失敗:", err);
+        alert("刪除失敗，請檢查權限");
+      }
     }
   };
 
@@ -95,6 +129,7 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
       layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
       className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden"
     >
       <div className="p-6">
@@ -131,14 +166,14 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
       <div className="bg-slate-50 p-6 border-t border-slate-100 space-y-3">
         <div className="flex justify-between text-xs">
           <span className="text-slate-400 font-medium">下次保養里程</span>
-          <span className="font-mono font-bold text-slate-700">{vehicle.nextServiceMileage?.toLocaleString()} km</span>
+          <span className="font-mono font-bold text-slate-700">{(vehicle.nextServiceMileage || 0).toLocaleString()} km</span>
         </div>
         <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-          <div className="bg-indigo-500 h-full w-[70%]" /> {/* 這裡可計算里程進度 */}
+          <div className="bg-indigo-500 h-full w-[70%]" />
         </div>
         <div className="flex justify-between text-[10px] pt-2">
-            <span className="text-slate-400 flex items-center gap-1"><ShieldCheck size={12}/> 保險: {vehicle.insuranceExpiry}</span>
-            <span className="text-slate-400 flex items-center gap-1"><AlertCircle size={12}/> 驗車: {vehicle.inspectionDate}</span>
+            <span className="text-slate-400 flex items-center gap-1"><ShieldCheck size={12}/> 保險: {vehicle.insuranceExpiry || '未設定'}</span>
+            <span className="text-slate-400 flex items-center gap-1"><AlertCircle size={12}/> 驗車: {vehicle.inspectionDate || '未設定'}</span>
         </div>
       </div>
     </motion.div>
@@ -165,8 +200,10 @@ function VehicleFormModal({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     setIsSubmitting(true);
 
+    const plateUpper = formData.plate.toUpperCase();
+
     // 檢查車牌唯一性
-    const q = query(collection(db, "vehicles"), where("plate", "==", formData.plate.toUpperCase()));
+    const q = query(collection(db, "vehicles"), where("plate", "==", plateUpper));
     const snap = await getDocs(q);
     if (!snap.empty) {
       alert("⚠️ 錯誤：此車牌已存在系統中！");
@@ -177,12 +214,13 @@ function VehicleFormModal({ onClose }: { onClose: () => void }) {
     try {
       await addDoc(collection(db, "vehicles"), {
         ...formData,
-        plate: formData.plate.toUpperCase(),
+        plate: plateUpper,
         created_at: serverTimestamp()
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error("建立失敗:", err);
+      alert("儲存失敗，請檢查網路連線");
     } finally {
       setIsSubmitting(false);
     }
@@ -193,6 +231,7 @@ function VehicleFormModal({ onClose }: { onClose: () => void }) {
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
         className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden"
       >
         <div className="p-8 border-b flex justify-between items-center bg-slate-50">
