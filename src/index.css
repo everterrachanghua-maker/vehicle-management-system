@@ -10,3 +10,17 @@
     @apply w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700 font-medium;
   }
 }
+@import "tailwindcss";
+
+body {
+  @apply antialiased; /* 讓字體更平滑 */
+}
+
+/* 滾動條美化 (深色選單用) */
+aside::-webkit-scrollbar {
+  width: 4px;
+}
+aside::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 10px;
+}
