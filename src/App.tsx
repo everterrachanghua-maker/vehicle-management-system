@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Car, PlusCircle, BarChart3, List } from 'lucide-react';
+import { List, PlusCircle, BarChart3, Car } from 'lucide-react';
 import { db } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 // 引入簡化後的組件
 import Garage from './components/Garage';
@@ -12,7 +12,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('garage');
   const [vehicles, setVehicles] = useState<any[]>([]);
 
-  // 全域監聽車輛清單，供各頁面使用
+  // 全域監聽車輛
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "vehicles"), (snap) => {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -21,40 +21,48 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* 頂部標題 */}
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
+      {/* 標題 */}
       <header className="bg-white border-b p-6 mb-6 shadow-sm">
-        <h1 className="text-xl font-black text-indigo-600 flex items-center gap-2">
-          <Car /> 採樣車輛管理簡易版
+        <h1 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
+          <Car size={24} /> 採樣組車輛管理
         </h1>
       </header>
 
-      {/* 主內容區 */}
+      {/* 內容區 */}
       <main className="max-w-md mx-auto px-4">
         {activeTab === 'garage' && <Garage vehicles={vehicles} />}
         {activeTab === 'log' && <LogForm vehicles={vehicles} onSuccess={() => setActiveTab('garage')} />}
         {activeTab === 'stats' && <SimpleStats vehicles={vehicles} />}
       </main>
 
-      {/* 底部導航列 (手機版優先設計，方便外勤操作) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
-        <NavBtn icon={<List />} label="車庫" active={activeTab === 'garage'} onClick={() => setActiveTab('garage')} />
-        <NavBtn icon={<PlusCircle />} label="記一筆" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
-        <NavBtn icon={<BarChart3 />} label="統計" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
+      {/* 底部導航 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-4 z-50 shadow-lg">
+        <button 
+          onClick={() => setActiveTab('garage')} 
+          className={`flex flex-col items-center gap-1 ${activeTab === 'garage' ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <List size={24} />
+          <span className="text-[10px] font-bold">車庫</span>
+        </button>
+        
+        <button 
+          onClick={() => setActiveTab('log')} 
+          className={`flex flex-col items-center gap-1 ${activeTab === 'log' ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <PlusCircle size={24} />
+          <span className="text-[10px] font-bold">記一筆</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('stats')} 
+          className={`flex flex-col items-center gap-1 ${activeTab === 'stats' ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <BarChart3 size={24} />
+          <span className="text-[10px] font-bold">統計</span>
+        </button>
       </nav>
     </div>
   );
 }
-
-function NavBtn({ icon, label, active, onClick }: any) {
-  return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
-      {icon}
-      <span className="text-[10px] font-bold">{label}</span>
-    </button>
-  );
-}
-      )}
-    </button>
-  );
 }
