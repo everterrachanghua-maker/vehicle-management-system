@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { List, Gauge, Users, Car, BarChart3, LogOut, ChevronLeft } from 'lucide-react';
+import { List, Gauge, Users, Car, BarChart3, LogOut, ShieldCheck, ChevronRight } from 'lucide-react';
 import { db } from './lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
@@ -36,78 +36,117 @@ export default function App() {
   const isAdmin = currentUser.role === 'admin';
 
   return (
-    <div className="flex min-h-screen bg-slate-100 font-sans">
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-slate-900">
       
-      {/* 1. 左側主內容區 */}
-      <main className="flex-1 p-6 overflow-y-auto">
-        <div className="max-w-4xl mx-auto">
+      {/* 1. 專業風左側導覽 (Midnight Blue) */}
+      <aside className="w-72 bg-[#0f172a] text-slate-300 flex flex-col sticky top-0 h-screen border-r border-slate-800">
+        
+        {/* Logo 區塊 */}
+        <div className="p-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Car className="text-white" size={24} />
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-lg leading-none tracking-tight">SAMPLING</h1>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Vehicle Control</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 功能選單 */}
+        <nav className="flex-1 px-4 py-4 space-y-1">
+          <div className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+            Operations
+          </div>
+          <SideBtn icon={<List size={18} />} label="車庫資產概覽" active={activeTab === 'garage'} onClick={() => setActiveTab('garage')} />
+          <SideBtn icon={<Gauge size={18} />} label="里程數據填報" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
+
+          {isAdmin && (
+            <>
+              <div className="px-4 py-3 mt-8 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-t border-slate-800 pt-8">
+                Administration
+              </div>
+              <SideBtn icon={<Users size={18} />} label="人員權限管理" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+              <SideBtn icon={<BarChart3 size={18} />} label="數據分析報告" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
+            </>
+          )}
+        </nav>
+
+        {/* 底部帳號資訊 */}
+        <div className="p-6 bg-[#0a101f] border-t border-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold text-white border border-slate-600">
+                {currentUser.name[0]}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-200">{currentUser.name}</p>
+                <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">{currentUser.role}</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => { setCurrentUser(null); localStorage.removeItem('user'); }}
+              className="text-slate-500 hover:text-rose-400 transition-colors"
+              title="登出系統"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* 2. 主內容區 */}
+      <main className="flex-1 overflow-y-auto">
+        {/* Top Header */}
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-10 sticky top-0 z-10 shadow-sm">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <span>系統</span>
+            <ChevronRight size={14} />
+            <span className="text-slate-900 font-bold">
+              {activeTab === 'garage' && '車庫資產概覽'}
+              {activeTab === 'log' && '里程數據填報'}
+              {activeTab === 'users' && '人員權限管理'}
+              {activeTab === 'stats' && '數據分析報告'}
+            </span>
+          </div>
+          <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
+            v2.4.0 STABLE
+          </div>
+        </header>
+
+        {/* 實際內容 */}
+        <div className="p-10 max-w-5xl mx-auto">
           {activeTab === 'garage' && <Garage vehicles={vehicles} isAdmin={isAdmin} />}
           {activeTab === 'log' && <LogForm vehicles={vehicles} user={currentUser} onSuccess={() => setActiveTab('garage')} />}
           {activeTab === 'stats' && isAdmin && <SimpleStats vehicles={vehicles} />}
           {activeTab === 'users' && isAdmin && <UserAdmin />}
         </div>
       </main>
-
-      {/* 2. 右側導覽選單 (深色主題) */}
-      <aside className="w-64 bg-[#1a2234] text-slate-300 flex flex-col shadow-xl">
-        <div className="p-6 border-b border-slate-700/50">
-          <h1 className="text-white font-black italic text-lg flex items-center gap-2">
-            <Car className="text-indigo-400" /> SAMPLING VMS
-          </h1>
-          <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">採樣組車輛管理系統</p>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          <p className="text-[10px] font-bold text-slate-500 px-4 py-2 uppercase">通用功能</p>
-          <SideBtn icon={<List size={18} />} label="車庫概覽" active={activeTab === 'garage'} onClick={() => setActiveTab('garage')} />
-          <SideBtn icon={<Gauge size={18} />} label="車輛里程填報" active={activeTab === 'log'} onClick={() => setActiveTab('log')} />
-
-          {isAdmin && (
-            <>
-              <p className="text-[10px] font-bold text-slate-500 px-4 py-6 uppercase">系統管理 (需驗證)</p>
-              <SideBtn icon={<Users size={18} />} label="人員管理" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-              <SideBtn icon={<Car size={18} />} label="車輛管理" active={activeTab === 'garage'} onClick={() => setActiveTab('garage')} />
-              <SideBtn icon={<BarChart3 size={18} />} label="數據統計匯總" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
-            </>
-          )}
-        </nav>
-
-        {/* 使用者資訊與登出 */}
-        <div className="p-4 bg-[#151b2a] border-t border-slate-700/50">
-          <div className="flex items-center gap-3 px-4 py-2 mb-4">
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold">
-              {currentUser.name[0]}
-            </div>
-            <div>
-              <p className="text-xs font-bold text-white">{currentUser.name}</p>
-              <p className="text-[10px] text-slate-500 uppercase">{currentUser.role}</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => { setCurrentUser(null); localStorage.removeItem('user'); }}
-            className="w-full flex items-center gap-2 px-4 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
-          >
-            <LogOut size={16} /> 登出系統
-          </button>
-        </div>
-      </aside>
     </div>
   );
 }
 
-// 右側選單按鈕組件
+// 專業風按鈕組件
 function SideBtn({ icon, label, active, onClick }: any) {
   return (
     <button 
       onClick={onClick} 
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+      className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-all duration-200 group relative ${
         active 
-        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
-        : 'hover:bg-slate-700/30 hover:text-white'
+        ? 'text-white bg-slate-800/50 shadow-inner' 
+        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
       }`}
     >
-      {icon}
-      <span>{label}</span>
+      {/* 側邊指示條 */}
+      {active && (
+        <div className="absolute left-0 w-1 h-5 bg-emerald-500 rounded-r-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+      )}
+      
+      <div className={`transition-colors ${active ? 'text-emerald-500' : 'group-hover:text-slate-200'}`}>
+        {icon}
+      </div>
+      <span className={active ? 'font-bold' : 'font-medium'}>{label}</span>
     </button>
   );
 }
