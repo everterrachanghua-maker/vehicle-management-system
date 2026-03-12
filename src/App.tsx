@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { 
   List, Users, Car, BarChart3, LogOut, 
-  ChevronRight, LayoutGrid, ClipboardCheck 
+  ChevronRight, PlusCircle 
 } from 'lucide-react';
 import { db } from './lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc } from 'firebase/firestore';
 
 // 引入功能組件
 import Login from './components/Login';
@@ -15,18 +15,18 @@ import UserAdmin from './components/UserAdmin';
 
 export default function App() {
   // --- 狀態管理 ---
-  const [currentUser, setCurrentUser] = useState<any>(null); // 登入使用者
-  const [activeTab, setActiveTab] = useState('garage'); // 目前分頁
-  const [selectedVehicle, setSelectedVehicle] = useState<any>(null); // 點選填報的車輛
-  const [vehicles, setVehicles] = useState<any[]>([]); // 全站車輛清單
+  const [currentUser, setCurrentUser] = useState<any>(null); 
+  const [activeTab, setActiveTab] = useState('garage'); 
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null); 
+  const [vehicles, setVehicles] = useState<any[]>([]); 
 
-  // 1. 初始化檢查是否已登入
+  // 1. 初始化檢查登入狀態
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  // 2. 實時監聽資料庫車輛變動
+  // 2. 實時監聽資料庫車輛變動 (重要：確保資料同步)
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "vehicles"), (snap) => {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -45,21 +45,21 @@ export default function App() {
     }} />;
   }
 
-  // --- 處理選擇車輛填報的函數 ---
+  // --- 處理功能邏輯 ---
   const handleSelectVehicle = (vehicle: any) => {
     setSelectedVehicle(vehicle);
-    setActiveTab('filling-log'); // 切換到隱藏的填報頁面
+    setActiveTab('filling-log');
   };
 
   const handleFinishLog = () => {
     setSelectedVehicle(null);
-    setActiveTab('garage'); // 填完回清單
+    setActiveTab('garage');
   };
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans text-slate-900">
       
-      {/* 1. 左側專業 Midnight Blue 導覽列 */}
+      {/* 1. 左側專業導覽列 (Midnight Blue) */}
       <aside className="w-72 bg-[#0f172a] text-slate-300 flex flex-col sticky top-0 h-screen border-r border-slate-800 shrink-0">
         
         {/* Logo 區塊 */}
@@ -93,6 +93,13 @@ export default function App() {
               <div className="px-4 py-3 mt-8 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-t border-slate-800 pt-8">
                 Administration
               </div>
+              {/* 新增功能：獨立的車輛資產管理入口 */}
+              <SideBtn 
+                icon={<PlusCircle size={18} />} 
+                label="車輛資產管理" 
+                active={activeTab === 'add-vehicle'} 
+                onClick={() => setActiveTab('add-vehicle')} 
+              />
               <SideBtn 
                 icon={<Users size={18} />} 
                 label="人員權限管理" 
@@ -109,12 +116,12 @@ export default function App() {
           )}
         </nav>
 
-        {/* 底部帳號資訊 */}
+        {/* 底部帳號資訊與登出 */}
         <div className="p-6 bg-[#0a101f] border-t border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold text-white border border-slate-600 uppercase">
-                {currentUser.name[0]}
+                {currentUser.name?.[0] || 'U'}
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-200">{currentUser.name}</p>
@@ -123,7 +130,8 @@ export default function App() {
             </div>
             <button 
               onClick={() => { setCurrentUser(null); localStorage.removeItem('user'); }}
-              className="text-slate-500 hover:text-rose-400 transition-colors"
+              className="text-slate-500 hover:text-rose-400 transition-colors p-2 hover:bg-slate-800 rounded-lg"
+              title="登出系統"
             >
               <LogOut size={18} />
             </button>
@@ -140,14 +148,15 @@ export default function App() {
             <ChevronRight size={14} />
             <span className="text-slate-900 font-bold">
               {activeTab === 'garage' && '採樣組車輛清單'}
-              {activeTab === 'filling-log' && `里程填報 - ${selectedVehicle?.name}`}
+              {activeTab === 'add-vehicle' && '管理員：車輛資產管理'}
+              {activeTab === 'filling-log' && `數據填報 - ${selectedVehicle?.name}`}
               {activeTab === 'users' && '人員權限管理'}
               {activeTab === 'stats' && '數據分析報告'}
             </span>
           </div>
         </header>
 
-        {/* 頁面切換邏輯 */}
+        {/* 內容顯示區 */}
         <div className="p-10 max-w-5xl mx-auto">
           {activeTab === 'garage' && (
             <Garage 
@@ -155,6 +164,15 @@ export default function App() {
               isAdmin={isAdmin} 
               onSelectVehicle={handleSelectVehicle} 
             />
+          )}
+
+          {/* 如果是管理者，且在新增車輛分頁，直接在 Garage 顯示帶有控制項的介面，或可擴展為獨立 Form */}
+          {activeTab === 'add-vehicle' && isAdmin && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* 這裡我們共用 Garage 但傳入特定參數，或是顯示專用的管理介面 */}
+                <h2 className="text-2xl font-bold mb-6">資產管理</h2>
+                <Garage vehicles={vehicles} isAdmin={true} onSelectVehicle={handleSelectVehicle} />
+            </div>
           )}
 
           {activeTab === 'filling-log' && selectedVehicle && (
@@ -179,14 +197,14 @@ export default function App() {
   );
 }
 
-// 內部組件：專業風側欄按鈕
-function SideBtn({ icon, label, active, onClick }: any) {
+// 內部子組件：專業風格側欄按鈕
+function SideBtn({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
   return (
     <button 
       onClick={onClick} 
       className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm transition-all duration-200 group relative ${
         active 
-        ? 'text-white bg-slate-800/50' 
+        ? 'text-white bg-slate-800/50 shadow-inner' 
         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
       }`}
     >
