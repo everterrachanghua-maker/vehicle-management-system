@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { db, storage } from '../lib/firebase'; // 確保您在 firebase.ts 導出了 storage
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { 
+  collection, addDoc, onSnapshot, query, orderBy, 
+  doc, updateDoc, deleteDoc 
+} from 'firebase/firestore';
 import { 
   Car, Hash, Gauge, ChevronDown, ChevronUp, Fuel, 
-  Droplets, Trash2, Edit3, Save, X, PlusCircle 
+  Droplets, Trash2, Edit3, Camera, Loader2, PlusCircle 
 } from 'lucide-react';
 
 export default function AdminVehicleManager() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // 1. 監聽數據 (實時同步)
   useEffect(() => {
@@ -22,55 +27,93 @@ export default function AdminVehicleManager() {
     return () => { unsubV(); unsubR(); };
   }, []);
 
-  // 2. 新增車輛邏輯
+  // 核心功能：處理圖片上傳
+  const handleFileUpload = async (file: File, vehiclePlate: string) => {
+    const storageRef = ref(storage, `vehicle_photos/${vehiclePlate}_${Date.now()}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  };
+
+  // 2. 新增車輛邏輯 (整合圖片上傳)
   const handleAddVehicle = async (e: any) => {
     e.preventDefault();
+    setIsUploading(true);
+    
     const name = e.target.name.value;
     const plate = e.target.plate.value.toUpperCase();
     const odo = Number(e.target.odo.value);
+    const photoFile = e.target.photo.files[0];
 
     try {
+      let imgUrl = "";
+      if (photoFile) {
+        imgUrl = await handleFileUpload(photoFile, plate);
+      }
+
       await addDoc(collection(db, "vehicles"), {
         name,
         plate,
         initialOdo: odo,
-        current_odo: odo, // 初始總里程
-        status: 'available'
+        current_odo: odo,
+        status: 'available',
+        imgUrl: imgUrl || "", // 儲存上傳後的圖片網址
+        createdAt: new Date()
       });
+      
       e.target.reset();
-      alert("車輛資產已新增");
-    } catch (err) { alert("新增失敗"); }
+      alert("車輛資產已成功入庫！");
+    } catch (err) {
+      console.error(err);
+      alert("新增失敗，請確認 Firebase Storage 權限。");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // 3. 刪除紀錄邏輯
   const handleDeleteRecord = async (recId: string) => {
-    if (confirm("確定要刪除這筆填報紀錄嗎？這不會更改目前車輛里程。")) {
+    if (confirm("確定要刪除這筆填報紀錄嗎？這不會更改目前車輛的總里程。")) {
       await deleteDoc(doc(db, "records", recId));
     }
   };
 
   return (
     <div className="space-y-8 pb-20">
-      {/* --- 頂部：管理員新增車輛區 --- */}
+      {/* --- 頂部：新增車輛區 (整合圖片選擇) --- */}
       <section className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
             <PlusCircle size={24} />
           </div>
-          <h2 className="text-xl font-bold text-slate-800">新增車輛資產</h2>
+          <h2 className="text-xl font-bold text-slate-800">資產入庫設定</h2>
         </div>
         
-        <form onSubmit={handleAddVehicle} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form onSubmit={handleAddVehicle} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          {/* 圖片選擇器 */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">車輛縮圖</label>
+            <div className="relative group">
+              <input name="photo" type="file" accept="image/*" className="hidden" id="vehicle-photo" />
+              <label htmlFor="vehicle-photo" className="flex items-center justify-center h-[52px] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer group-hover:border-emerald-500 transition-all">
+                <Camera size={20} className="text-slate-400 group-hover:text-emerald-500" />
+              </label>
+            </div>
+          </div>
+
           <InputGroup label="車名/型號" name="name" placeholder="Toyota Cross" />
           <InputGroup label="車牌號碼" name="plate" placeholder="RFY-9731" />
           <InputGroup label="最初里程 (KM)" name="odo" type="number" placeholder="0" />
-          <button className="bg-[#0f172a] text-white h-[52px] rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-            確認入庫
+          
+          <button 
+            disabled={isUploading} 
+            className={`bg-[#0f172a] text-white h-[52px] rounded-2xl font-bold transition-all shadow-lg shadow-slate-200 flex items-center justify-center ${isUploading ? 'opacity-70' : 'hover:bg-slate-800'}`}
+          >
+            {isUploading ? <Loader2 className="animate-spin" /> : "確認入庫"}
           </button>
         </form>
       </section>
 
-      {/* --- 中間：車輛資產管理清單 --- */}
+      {/* --- 中間：資產清單與歷史紀錄 --- */}
       <section className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b bg-slate-50/50">
           <h3 className="font-bold text-slate-500 text-sm uppercase tracking-widest">車輛資產清單與出勤細節</h3>
@@ -79,7 +122,8 @@ export default function AdminVehicleManager() {
           <table className="w-full text-left">
             <thead className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 border-b">
               <tr>
-                <th className="px-6 py-4 w-12"></th>
+                <th className="px-6 py-4 w-12 text-center">細節</th>
+                <th className="px-4 py-4">縮圖</th>
                 <th className="px-4 py-4">車名 / 車牌</th>
                 <th className="px-4 py-4 text-center">最初里程</th>
                 <th className="px-4 py-4 text-center">目前總里程</th>
@@ -104,13 +148,22 @@ export default function AdminVehicleManager() {
                         </button>
                       </td>
                       <td className="px-4 py-5">
+                        {v.imgUrl ? (
+                          <img src={v.imgUrl} className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-sm bg-slate-50" />
+                        ) : (
+                          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-300">
+                            <Car size={20} />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-5">
                         <p className="font-bold text-slate-800">{v.name}</p>
                         <p className="text-xs font-mono font-bold text-slate-400">{v.plate}</p>
                       </td>
                       <td className="px-4 py-5 text-center font-mono text-slate-500">{v.initialOdo?.toLocaleString()}</td>
                       <td className="px-4 py-5 text-center font-mono font-black text-slate-800">{v.current_odo?.toLocaleString()}</td>
                       <td className="px-4 py-5 text-center">
-                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-black">
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black">
                           +{totalDriven.toLocaleString()} km
                         </span>
                       </td>
@@ -125,37 +178,34 @@ export default function AdminVehicleManager() {
                         </select>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <button onClick={async () => {if(confirm("確定刪除？")) await deleteDoc(doc(db, "vehicles", v.id))}} className="text-slate-300 hover:text-rose-500 transition-colors">
+                        <button onClick={async () => {if(confirm("確定要將此車輛從資產庫刪除？")) await deleteDoc(doc(db, "vehicles", v.id))}} className="text-slate-300 hover:text-rose-500 transition-colors">
                           <Trash2 size={16} />
                         </button>
                       </td>
                     </tr>
 
-                    {/* 下拉展開：該車的所有填報紀錄 */}
+                    {/* 展開：出勤填報細節 */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={7} className="p-0 bg-slate-50/50 border-b">
+                        <td colSpan={8} className="p-0 bg-slate-50/50 border-b">
                           <div className="m-6 bg-white rounded-2xl border border-slate-200 shadow-inner overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">填報歷史紀錄</span>
-                            </div>
                             <table className="w-full text-xs text-left">
                               <thead className="bg-slate-50/50 text-slate-400 font-bold border-b">
                                 <tr>
                                   <th className="px-6 py-3">日期</th>
                                   <th className="px-6 py-3">填報人</th>
                                   <th className="px-6 py-3 text-center">里程 (起 → 止)</th>
-                                  <th className="px-6 py-3 text-center">本次公里</th>
+                                  <th className="px-6 py-3 text-center">單次公里</th>
                                   <th className="px-6 py-3 text-center">維護項目</th>
-                                  <th className="px-6 py-3 text-right">操作</th>
+                                  <th className="px-6 py-3 text-right">管理</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {vRecords.length === 0 ? (
-                                  <tr><td colSpan={6} className="p-8 text-center text-slate-300 italic">尚無填報數據</td></tr>
+                                  <tr><td colSpan={6} className="p-8 text-center text-slate-300 italic">尚無行駛紀錄</td></tr>
                                 ) : (
                                   vRecords.map(rec => (
-                                    <tr key={rec.id} className="hover:bg-slate-50">
+                                    <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
                                       <td className="px-6 py-4 text-slate-500 font-mono">{rec.date}</td>
                                       <td className="px-6 py-4 font-bold text-slate-700">{rec.userName}</td>
                                       <td className="px-6 py-4 text-center font-mono">
@@ -163,9 +213,7 @@ export default function AdminVehicleManager() {
                                         <span className="mx-2 text-slate-300">→</span>
                                         <span className="font-bold text-indigo-600">{rec.endOdo}</span>
                                       </td>
-                                      <td className="px-6 py-4 text-center font-black text-emerald-600">
-                                        {rec.mileageDiff} km
-                                      </td>
+                                      <td className="px-6 py-4 text-center font-black text-emerald-600">{rec.mileageDiff} km</td>
                                       <td className="px-6 py-4 text-center">
                                         <div className="flex justify-center gap-2">
                                           {rec.hasFuel && <Fuel size={14} className="text-orange-500" title="有加油" />}
@@ -211,5 +259,3 @@ function InputGroup({ label, name, placeholder, type = "text" }: any) {
     </div>
   );
 }
-
-import React from 'react';
