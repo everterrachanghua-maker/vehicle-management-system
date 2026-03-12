@@ -4,7 +4,7 @@ import {
   ChevronRight, PlusCircle 
 } from 'lucide-react';
 import { db } from './lib/firebase';
-import { collection, onSnapshot, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 // 引入功能組件
 import Login from './components/Login';
@@ -46,11 +46,13 @@ export default function App() {
   }
 
   // --- 處理功能邏輯 ---
+  // 當使用者在清單點擊車輛時
   const handleSelectVehicle = (vehicle: any) => {
     setSelectedVehicle(vehicle);
-    setActiveTab('filling-log');
+    setActiveTab('filling-log'); // 切換到填報分頁
   };
 
+  // 填報完成後的動作
   const handleFinishLog = () => {
     setSelectedVehicle(null);
     setActiveTab('garage');
@@ -93,12 +95,11 @@ export default function App() {
               <div className="px-4 py-3 mt-8 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-t border-slate-800 pt-8">
                 Administration
               </div>
-              {/* 新增功能：獨立的車輛資產管理入口 */}
               <SideBtn 
                 icon={<PlusCircle size={18} />} 
                 label="車輛資產管理" 
                 active={activeTab === 'add-vehicle'} 
-                onClick={() => setActiveTab('add-vehicle')} 
+                onClick={() => { setActiveTab('add-vehicle'); setSelectedVehicle(null); }} 
               />
               <SideBtn 
                 icon={<Users size={18} />} 
@@ -124,14 +125,13 @@ export default function App() {
                 {currentUser.name?.[0] || 'U'}
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-200">{currentUser.name}</p>
+                <p className="text-sm font-bold text-slate-200 truncate w-32">{currentUser.name}</p>
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">{currentUser.role}</p>
               </div>
             </div>
             <button 
               onClick={() => { setCurrentUser(null); localStorage.removeItem('user'); }}
               className="text-slate-500 hover:text-rose-400 transition-colors p-2 hover:bg-slate-800 rounded-lg"
-              title="登出系統"
             >
               <LogOut size={18} />
             </button>
@@ -158,23 +158,29 @@ export default function App() {
 
         {/* 內容顯示區 */}
         <div className="p-10 max-w-5xl mx-auto">
+          
+          {/* 1. 車輛清單分頁 (員工主要使用的頁面) */}
           {activeTab === 'garage' && (
             <Garage 
               vehicles={vehicles} 
-              isAdmin={isAdmin} 
+              isAdmin={false} // 這裡設為 false，清單頁面保持乾淨
               onSelectVehicle={handleSelectVehicle} 
             />
           )}
 
-          {/* 如果是管理者，且在新增車輛分頁，直接在 Garage 顯示帶有控制項的介面，或可擴展為獨立 Form */}
+          {/* 2. 車輛資產管理分頁 (Admin 專用，會顯示新增按鈕與維修狀態) */}
           {activeTab === 'add-vehicle' && isAdmin && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* 這裡我們共用 Garage 但傳入特定參數，或是顯示專用的管理介面 */}
-                <h2 className="text-2xl font-bold mb-6">資產管理</h2>
-                <Garage vehicles={vehicles} isAdmin={true} onSelectVehicle={handleSelectVehicle} />
+              <h2 className="text-2xl font-bold text-slate-800 mb-6">資產管理中心</h2>
+              <Garage 
+                vehicles={vehicles} 
+                isAdmin={true} // 傳入 true，讓 Garage 組件顯示「新增按鈕」
+                onSelectVehicle={handleSelectVehicle} 
+              />
             </div>
           )}
 
+          {/* 3. 數據填報頁面 */}
           {activeTab === 'filling-log' && selectedVehicle && (
             <LogForm 
               vehicle={selectedVehicle} 
@@ -184,10 +190,12 @@ export default function App() {
             />
           )}
 
+          {/* 4. 數據統計報告 */}
           {activeTab === 'stats' && isAdmin && (
             <SimpleStats vehicles={vehicles} />
           )}
 
+          {/* 5. 人員管理 */}
           {activeTab === 'users' && isAdmin && (
             <UserAdmin />
           )}
