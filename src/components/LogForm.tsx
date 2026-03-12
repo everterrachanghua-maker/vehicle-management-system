@@ -9,55 +9,67 @@ export default function LogForm({ vehicles, onSuccess }: any) {
     e.preventDefault();
     const vId = e.target.vehicle.value;
     const val = Number(e.target.value.value);
-    
-    // 1. 存入紀錄表
-    await addDoc(collection(db, "records"), {
-      vehicleId: vId,
-      type: type,
-      value: val,
-      date: e.target.date.value,
-      notes: e.target.notes.value,
-      created_at: serverTimestamp()
-    });
+    const date = e.target.date.value;
+    const notes = e.target.notes.value;
 
-    // 2. 如果是里程或加油，同步更新車輛的主里程
-    if (type !== 'service') {
-      await updateDoc(doc(db, "vehicles", vId), { current_odo: val });
+    if (!vId) return alert("請選擇車輛");
+
+    try {
+      // 1. 存入紀錄
+      await addDoc(collection(db, "records"), {
+        vehicleId: vId,
+        type: type,
+        value: val,
+        date: date,
+        notes: notes,
+        createdAt: serverTimestamp()
+      });
+
+      // 2. 如果是里程或加油，更新車輛目前里程
+      if (type === 'odo' || type === 'fuel') {
+        await updateDoc(doc(db, "vehicles", vId), { current_odo: val });
+      }
+
+      alert("紀錄已儲存！");
+      onSuccess();
+    } catch (err) {
+      alert("儲存失敗，請檢查網路");
     }
-
-    alert("紀錄成功！");
-    onSuccess();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-[32px] border shadow-sm">
-      <h2 className="text-xl font-bold text-center">記一筆資料</h2>
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl border shadow-sm space-y-6">
+      <h2 className="text-lg font-bold text-center">新增紀錄</h2>
       
-      <div className="flex bg-slate-100 p-1 rounded-2xl">
+      {/* 類型切換 */}
+      <div className="flex bg-slate-100 p-1 rounded-xl">
         {[['odo','里程'],['fuel','加油'],['service','保養']].map(([k, v]) => (
-          <button key={k} type="button" onClick={() => setType(k)} className={`flex-1 py-2 rounded-xl text-sm font-bold ${type === k ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>
+          <button 
+            key={k} type="button" onClick={() => setType(k)} 
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${type === k ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+          >
             {v}
           </button>
         ))}
       </div>
 
       <div className="space-y-4">
-        <select name="vehicle" className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none font-bold" required>
-          <option value="">選擇車輛</option>
+        <select name="vehicle" className="w-full p-3 bg-slate-50 border rounded-xl font-bold" required>
+          <option value="">-- 選擇車輛 --</option>
           {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.name} ({v.plate})</option>)}
         </select>
 
-        <input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none" required />
+        <input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-3 bg-slate-50 border rounded-xl" required />
         
         <div className="relative">
-          <input name="value" type="number" placeholder={type === 'fuel' ? "加了幾公升？" : "目前的里程數？"} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none text-xl font-bold" required />
-          <span className="absolute right-4 top-4 font-bold text-slate-300">{type === 'fuel' ? 'L' : 'km'}</span>
+          <input name="value" type="number" placeholder={type === 'fuel' ? "加油後里程？" : "目前的里程數？"} className="w-full p-4 bg-slate-50 border rounded-2xl text-xl font-bold" required />
+          <span className="absolute right-4 top-4 font-bold text-slate-300">km</span>
         </div>
 
-        <input name="notes" placeholder="備註 (選填)" className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none" />
+        <input name="notes" placeholder="備註 (如：加油 $1200 / 定期保養)" className="w-full p-3 bg-slate-50 border rounded-xl" />
       </div>
 
-      <button className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-200">儲存紀錄</button>
+      <button className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg">儲存紀錄</button>
     </form>
   );
 }
