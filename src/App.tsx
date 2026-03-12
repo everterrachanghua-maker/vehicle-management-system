@@ -12,6 +12,7 @@ import Garage from './components/Garage';
 import LogForm from './components/LogForm';
 import SimpleStats from './components/SimpleStats';
 import UserAdmin from './components/UserAdmin';
+import AdminVehicleManager from './components/AdminVehicleManager'; // 確保匯入此組件
 
 export default function App() {
   // --- 狀態管理 ---
@@ -26,7 +27,7 @@ export default function App() {
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  // 2. 實時監聽資料庫車輛變動 (重要：確保資料同步)
+  // 2. 實時監聽資料庫車輛變動
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "vehicles"), (snap) => {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -46,13 +47,11 @@ export default function App() {
   }
 
   // --- 處理功能邏輯 ---
-  // 當使用者在清單點擊車輛時
   const handleSelectVehicle = (vehicle: any) => {
     setSelectedVehicle(vehicle);
-    setActiveTab('filling-log'); // 切換到填報分頁
+    setActiveTab('filling-log'); 
   };
 
-  // 填報完成後的動作
   const handleFinishLog = () => {
     setSelectedVehicle(null);
     setActiveTab('garage');
@@ -61,7 +60,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans text-slate-900">
       
-      {/* 1. 左側專業導覽列 (Midnight Blue) */}
+      {/* 1. 左側導覽列 (Midnight Blue) */}
       <aside className="w-72 bg-[#0f172a] text-slate-300 flex flex-col sticky top-0 h-screen border-r border-slate-800 shrink-0">
         
         {/* Logo 區塊 */}
@@ -117,7 +116,7 @@ export default function App() {
           )}
         </nav>
 
-        {/* 底部帳號資訊與登出 */}
+        {/* 底部帳號資訊 */}
         <div className="p-6 bg-[#0a101f] border-t border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -141,7 +140,6 @@ export default function App() {
 
       {/* 2. 右側主內容區 */}
       <main className="flex-1 overflow-y-auto">
-        {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-10 sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>系統</span>
@@ -156,31 +154,24 @@ export default function App() {
           </div>
         </header>
 
-        {/* 內容顯示區 */}
         <div className="p-10 max-w-5xl mx-auto">
-          
-          {/* 1. 車輛清單分頁 (員工主要使用的頁面) */}
+          {/* A. 前台車輛清單 */}
           {activeTab === 'garage' && (
             <Garage 
               vehicles={vehicles} 
-              isAdmin={false} // 這裡設為 false，清單頁面保持乾淨
+              isAdmin={false} 
               onSelectVehicle={handleSelectVehicle} 
             />
           )}
 
-          {/* 2. 車輛資產管理分頁 (Admin 專用，會顯示新增按鈕與維修狀態) */}
+          {/* B. 管理員：車輛資產管理後台 (修正點) */}
           {activeTab === 'add-vehicle' && isAdmin && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h2 className="text-2xl font-bold text-slate-800 mb-6">資產管理中心</h2>
-              <Garage 
-                vehicles={vehicles} 
-                isAdmin={true} // 傳入 true，讓 Garage 組件顯示「新增按鈕」
-                onSelectVehicle={handleSelectVehicle} 
-              />
+              <AdminVehicleManager />
             </div>
           )}
 
-          {/* 3. 數據填報頁面 */}
+          {/* C. 里程填報表單 */}
           {activeTab === 'filling-log' && selectedVehicle && (
             <LogForm 
               vehicle={selectedVehicle} 
@@ -190,12 +181,12 @@ export default function App() {
             />
           )}
 
-          {/* 4. 數據統計報告 */}
+          {/* D. 數據統計報告 */}
           {activeTab === 'stats' && isAdmin && (
             <SimpleStats vehicles={vehicles} />
           )}
 
-          {/* 5. 人員管理 */}
+          {/* E. 人員權限管理 */}
           {activeTab === 'users' && isAdmin && (
             <UserAdmin />
           )}
@@ -205,7 +196,7 @@ export default function App() {
   );
 }
 
-// 內部子組件：專業風格側欄按鈕
+// 側欄按鈕組件
 function SideBtn({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
   return (
     <button 
