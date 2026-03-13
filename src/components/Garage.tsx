@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Car, ChevronRight, PlusCircle, X, AlertCircle, Gauge } from 'lucide-react';
+import { Car, ChevronRight, PlusCircle, X, AlertCircle, Hash } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
@@ -10,6 +10,7 @@ interface Vehicle {
   plate: string;
   current_odo: number;
   status?: 'available' | 'maintenance';
+  imgUrl?: string; // 支援圖片顯示
 }
 
 interface GarageProps {
@@ -22,6 +23,14 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
   const [showAdd, setShowAdd] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 核心功能：平滑捲動至指定車輛位置
+  const scrollToVehicle = (id: string) => {
+    const element = document.getElementById(`vehicle-card-${id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
   // 2. 處理管理員新增車輛 (Firebase 邏輯)
   const handleAddVehicle = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,7 +42,8 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
         name: formData.get('name') as string, 
         plate: (formData.get('plate') as string).toUpperCase(), 
         current_odo: Number(formData.get('odo')) || 0,
-        status: 'available' 
+        status: 'available',
+        createdAt: new Date()
       });
       setShowAdd(false);
     } catch (error) {
@@ -45,13 +55,13 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 pb-20">
       {/* 頁首標題與管理按鈕 */}
       <div className="flex justify-between items-end">
         <div className="relative">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">目前在線車輛</h2>
           <p className="text-slate-400 mt-2 font-medium flex items-center gap-2">
-            <AlertCircle size={14}/> 點選下方車輛卡片進行里程數據填報
+            <AlertCircle size={14}/> 點選索引或下方卡片進行數據填報
           </p>
         </div>
         
@@ -95,7 +105,30 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
         </form>
       )}
 
-      {/* 車輛清單網格 */}
+      {/* 快速索引選單區 */}
+      {vehicles.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Hash size={14} className="text-emerald-500" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">快速索引選單</span>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {vehicles.map((v) => (
+              <button
+                key={`nav-${v.id}`}
+                onClick={() => scrollToVehicle(v.id)}
+                className="bg-white border border-slate-200 p-3 rounded-xl text-xs font-mono font-bold text-slate-500 hover:border-emerald-500 hover:text-emerald-600 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 flex items-center justify-center gap-2 group"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-200 group-hover:bg-emerald-500 transition-colors"></div>
+                {v.plate}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 車輛詳細卡片網格 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {vehicles.length === 0 ? (
           <div className="col-span-2 py-32 text-center bg-white rounded-[32px] border-2 border-dashed border-slate-100">
@@ -108,6 +141,7 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
 
             return (
               <div 
+                id={`vehicle-card-${v.id}`} // 設定捲動錨點 ID
                 key={v.id} 
                 onClick={() => {
                   if (isMaintenance) {
@@ -122,25 +156,23 @@ export default function Garage({ vehicles, isAdmin, onSelectVehicle }: GaragePro
                     : 'border-slate-100 hover:border-emerald-500/30 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] cursor-pointer hover:-translate-y-1'
                   }`}
               >
-                {/* 狀態標籤與圖示 */}
+                {/* 狀態標籤與大頭貼 */}
                 <div className="flex justify-between items-start mb-8">
-                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors duration-500 
-                    ${isMaintenance 
-                      ? 'bg-slate-200 text-slate-400' 
-                      : 'bg-slate-50 text-slate-400 group-hover:bg-emerald-500 group-hover:text-white group-hover:shadow-lg group-hover:shadow-emerald-500/30'
-                    }`}>
-                    <Car size={32} />
+                  <div className={`w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-500 shadow-inner
+                    ${isMaintenance ? 'bg-slate-200' : 'bg-slate-50 group-hover:bg-emerald-500 group-hover:shadow-emerald-500/30'}`}>
+                    {v.imgUrl ? (
+                      <img src={v.imgUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <Car size={32} className={`transition-colors ${isMaintenance ? 'text-slate-400' : 'text-slate-300 group-hover:text-white'}`} />
+                    )}
                   </div>
                   <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border
-                    ${isMaintenance 
-                      ? 'bg-rose-50 text-rose-500 border-rose-100' 
-                      : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                    }`}>
+                    ${isMaintenance ? 'bg-rose-50 text-rose-500 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
                     {isMaintenance ? '維修中 (Maintenance)' : '可填報 (Available)'}
                   </div>
                 </div>
 
-                {/* 車輛資訊 */}
+                {/* 車輛標題 */}
                 <div className="space-y-1">
                   <h3 className="text-2xl font-black text-slate-800 group-hover:text-emerald-600 transition-colors">
                     {v.name}
