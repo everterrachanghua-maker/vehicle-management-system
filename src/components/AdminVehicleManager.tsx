@@ -36,9 +36,9 @@ export default function AdminVehicleManager() {
   const getRowBgColor = (current: number, contract: number) => {
     if (!contract || contract === 0) return "bg-white hover:bg-slate-50";
     const ratio = current / contract;
-    if (ratio >= 1) return "bg-red-50 hover:bg-red-100/80";
-    if (ratio >= 0.9) return "bg-orange-100 hover:bg-orange-100/80";
-    if (ratio >= 0.7) return "bg-amber-50 hover:bg-amber-100/80";
+    if (ratio >= 1) return "bg-red-200 hover:bg-red-100/80";
+    if (ratio >= 0.9) return "bg-orange-200 hover:bg-orange-100/80";
+    if (ratio >= 0.7) return "bg-amber-200 hover:bg-amber-100/80";
     return "bg-white hover:bg-slate-50";
   };
 
@@ -200,9 +200,9 @@ export default function AdminVehicleManager() {
         <div className="p-6 border-b bg-slate-50/50 flex justify-between items-center">
           <h3 className="font-bold text-slate-500 text-sm uppercase tracking-widest">車輛資產管理清單</h3>
           <div className="flex gap-4 text-[10px] font-bold">
-             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-200 rounded-full"></div> 70% 警告</span>
-             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-200 rounded-full"></div> 90% 嚴重</span>
-             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-200 rounded-full"></div> 100% 超標</span>
+             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-400 rounded-full"></div> 70% 警告</span>
+             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-400 rounded-full"></div> 90% 嚴重</span>
+             <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-400 rounded-full"></div> 100% 超標</span>
           </div>
         </div>
         <div className="overflow-x-auto">
