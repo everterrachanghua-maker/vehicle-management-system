@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from '../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db } from '../lib/firebase'; // 確保已移除 storage 引用
 import { 
   collection, addDoc, onSnapshot, query, orderBy, 
   doc, updateDoc, deleteDoc 
@@ -15,8 +14,8 @@ export default function AdminVehicleManager() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // 用於新增車輛按鈕
+  const [isUpdating, setIsUpdating] = useState(false);   // 用於編輯彈窗按鈕
   
   // 編輯與預覽狀態
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
@@ -37,13 +36,13 @@ export default function AdminVehicleManager() {
   const getRowBgColor = (current: number, contract: number) => {
     if (!contract || contract === 0) return "bg-white hover:bg-slate-50";
     const ratio = current / contract;
-    if (ratio >= 1) return "bg-red-50 hover:bg-red-100/80";     // 100% 以上：淺紅
-    if (ratio >= 0.9) return "bg-orange-50 hover:bg-orange-100/80"; // 90% 以上：淺橘
-    if (ratio >= 0.7) return "bg-amber-50 hover:bg-amber-100/80";   // 70% 以上：淺黃
-    return "bg-white hover:bg-slate-50"; // 正常
+    if (ratio >= 1) return "bg-red-50 hover:bg-red-100/80";
+    if (ratio >= 0.9) return "bg-orange-50 hover:bg-orange-100/80";
+    if (ratio >= 0.7) return "bg-amber-50 hover:bg-amber-100/80";
+    return "bg-white hover:bg-slate-50";
   };
 
-  // --- 輔助功能：圖片壓縮 (優化儲存空間與上傳速度) ---
+  // --- 輔助功能：圖片壓縮 (Base64 模式下非常重要) ---
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -55,7 +54,7 @@ export default function AdminVehicleManager() {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const MAX_WIDTH = 1024;
+          const MAX_WIDTH = 800; 
           if (width > MAX_WIDTH) {
             height *= MAX_WIDTH / width;
             width = MAX_WIDTH;
@@ -64,9 +63,19 @@ export default function AdminVehicleManager() {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => { if (blob) resolve(blob); }, 'image/jpeg', 0.7);
+          canvas.toBlob((blob) => { if (blob) resolve(blob); }, 'image/jpeg', 0.6);
         };
       };
+    });
+  };
+
+  // --- 輔助功能：將圖片轉為 Base64 字串 ---
+  const getBase64 = (file: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
     });
   };
 
@@ -87,10 +96,10 @@ export default function AdminVehicleManager() {
     setPreviewUrl(null);
   };
 
-  // 2. 新增車輛邏輯
+  // 2. 新增車輛邏輯 (使用 Base64)
   const handleAddVehicle = async (e: any) => {
     e.preventDefault();
-    setIsUploading(true);
+    setIsUploading(true); // 使用專屬新增狀態
     const name = e.target.name.value;
     const plate = e.target.plate.value.toUpperCase();
     const odo = Number(e.target.odo.value);
@@ -98,27 +107,31 @@ export default function AdminVehicleManager() {
     const photoFile = e.target.photo.files[0];
 
     try {
-      let imgUrl = "";
+      let finalImgUrl = "";
       if (photoFile) {
         const compressedBlob = await compressImage(photoFile);
-        const storageRef = ref(storage, `vehicle_photos/${plate}_${Date.now()}.jpg`);
-        await uploadBytes(storageRef, compressedBlob);
-        imgUrl = await getDownloadURL(storageRef);
+        finalImgUrl = await getBase64(compressedBlob);
       }
 
       await addDoc(collection(db, "vehicles"), {
         name, plate, initialOdo: odo, current_odo: odo, contractOdo,
-        status: 'available', imgUrl, createdAt: new Date()
+        status: 'available', imgUrl: finalImgUrl, createdAt: new Date()
       });
       e.target.reset();
+      setPreviewUrl(null);
       alert("車輛資產已成功入庫！");
-    } catch (err) { alert("新增失敗"); } finally { setIsUploading(false); }
+    } catch (err) { 
+      console.error(err);
+      alert("新增失敗"); 
+    } finally { 
+      setIsUploading(false); 
+    }
   };
 
-  // 3. 更新車輛資料邏輯 (整合壓縮與預覽)
+  // 3. 更新車輛資料邏輯 (使用 Base64)
   const handleUpdateVehicle = async (e: any) => {
     e.preventDefault();
-    setIsUpdating(true);
+    setIsUpdating(true); // 使用專屬更新狀態
     const { id, name, plate, initialOdo, contractOdo, imgUrl } = editingVehicle;
     const newPhotoFile = e.target.edit_photo?.files[0];
 
@@ -126,9 +139,7 @@ export default function AdminVehicleManager() {
       let finalImgUrl = imgUrl;
       if (newPhotoFile) {
         const compressedBlob = await compressImage(newPhotoFile);
-        const storageRef = ref(storage, `vehicle_photos/${plate}_${Date.now()}.jpg`);
-        await uploadBytes(storageRef, compressedBlob);
-        finalImgUrl = await getDownloadURL(storageRef);
+        finalImgUrl = await getBase64(compressedBlob);
       }
       
       await updateDoc(doc(db, "vehicles", id), {
@@ -138,8 +149,13 @@ export default function AdminVehicleManager() {
         imgUrl: finalImgUrl
       });
       closeEditModal();
-      alert("車輛資料已成功更新！");
-    } catch (err) { alert("更新失敗"); } finally { setIsUpdating(false); }
+      alert("車輛資訊已成功更新！");
+    } catch (err) { 
+      console.error(err);
+      alert("更新失敗"); 
+    } finally { 
+      setIsUpdating(false); 
+    }
   };
 
   const handleDeleteRecord = async (recId: string) => {
@@ -158,8 +174,15 @@ export default function AdminVehicleManager() {
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">車輛縮圖</label>
             <div className="relative group">
-              <input name="photo" type="file" accept="image/*" className="hidden" id="vehicle-photo" />
-              <label htmlFor="vehicle-photo" className="flex items-center justify-center h-[52px] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer group-hover:border-emerald-500 transition-all"><Camera size={20} className="text-slate-400 group-hover:text-emerald-500" /></label>
+              <input name="photo" type="file" accept="image/*" className="hidden" id="vehicle-photo" onChange={handleFileChange} />
+              <label htmlFor="vehicle-photo" className="flex items-center justify-center h-[52px] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer group-hover:border-emerald-500 transition-all overflow-hidden">
+                {/* 顯示新增時的圖片預覽 */}
+                {previewUrl && !editingVehicle ? (
+                  <img src={previewUrl} className="w-full h-full object-cover" />
+                ) : (
+                  <Camera size={20} className="text-slate-400 group-hover:text-emerald-500" />
+                )}
+              </label>
             </div>
           </div>
           <InputGroup label="車名/型號" name="name" placeholder="Toyota Cross" />
@@ -211,8 +234,8 @@ export default function AdminVehicleManager() {
                         </button>
                       </td>
                       <td className="px-4 py-5">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                           {v.imgUrl ? <img src={v.imgUrl} className="w-full h-full object-cover" /> : <Car size={20} className="m-auto mt-3 text-slate-200"/>}
+                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm flex items-center justify-center">
+                           {v.imgUrl ? <img src={v.imgUrl} className="w-full h-full object-cover" /> : <Car size={20} className="text-slate-200"/>}
                         </div>
                       </td>
                       <td className="px-4 py-5 font-bold text-slate-800">{v.name}<p className="text-xs font-mono font-bold text-slate-400">{v.plate}</p></td>
@@ -282,17 +305,17 @@ export default function AdminVehicleManager() {
         </div>
       </section>
 
-      {/* --- 編輯彈窗 (整合新給的預覽與壓縮功能) --- */}
+      {/* --- 編輯彈窗 --- */}
       {editingVehicle && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleUpdateVehicle} className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 bg-[#0f172a] text-white flex justify-between items-center">
+          <form onSubmit={handleUpdateVehicle} className="bg-white w-full max-md:max-h-[90vh] max-w-md rounded-[40px] shadow-2xl overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="p-8 bg-[#0f172a] text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="text-xl font-bold">編輯車輛資訊</h3>
               <button type="button" onClick={closeEditModal} className="p-2 hover:bg-white/10 rounded-full"><X size={24}/></button>
             </div>
 
             <div className="p-8 space-y-6">
-              {/* 圖片預覽區 */}
+              {/* 編輯時圖片預覽區 */}
               <div className="flex flex-col items-center gap-4 py-2">
                 <div className="relative group">
                   <div className="w-32 h-32 rounded-[32px] bg-slate-50 border-2 border-slate-200 overflow-hidden flex items-center justify-center shadow-inner">
@@ -310,7 +333,7 @@ export default function AdminVehicleManager() {
                   <input name="edit_photo" type="file" accept="image/*" className="hidden" id="edit_photo" onChange={handleFileChange} />
                 </div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {previewUrl ? "已選取新照片 (待儲存)" : "點擊相機更換照片"}
+                  {previewUrl ? "已選取新照片" : "點擊相機更換照片"}
                 </p>
               </div>
 
