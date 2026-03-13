@@ -26,6 +26,11 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
     const hasFuel = e.target.has_fuel.checked;
     const hasWash = e.target.has_wash.checked;
 
+    // --- 自動擷取當前時間 (例如 14:30) ---
+    const now = new Date();
+    const currentTime = now.getHours().toString().padStart(2, '0') + ":" + 
+                        now.getMinutes().toString().padStart(2, '0');
+
     // 邏輯驗證
     if (endOdo < startOdo) {
       alert("錯誤：結束里程不能小於初始里程！");
@@ -39,13 +44,14 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
     }
 
     try {
-      // 1. 存入詳細紀錄至 records 集合
+      // 1. 存入詳細紀錄至 records 集合 (加入 time 欄位)
       await addDoc(collection(db, "records"), {
         vehicleId: vehicle.id,
         vehicleName: vehicle.name,
         vehiclePlate: vehicle.plate,
         userName: user.name,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0], // 2023-10-27
+        time: currentTime, // 新增：儲存精確填報時間
         startOdo,
         endOdo,
         mileageDiff: endOdo - startOdo,
@@ -53,7 +59,7 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
         hasFuel,
         hasWash,
         hasAbnormality,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp() // Firestore 伺服器時間戳
       });
 
       // 2. 更新車輛主表的最新里程
@@ -61,9 +67,10 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
         current_odo: endOdo
       });
 
-      alert("填報成功！辛苦了！");
+      alert("數據已成功送出！辛苦了！");
       onSuccess();
     } catch (err) {
+      console.error(err);
       alert("儲存失敗，請檢查網路連線");
     } finally {
       setLoading(false);
@@ -72,7 +79,7 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
 
   return (
     <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      {/* 返回按鈕 */}
+      {/* 返回清單按鈕 */}
       <button onClick={onCancel} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-6 font-bold transition-colors group">
         <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回清單
       </button>
@@ -131,7 +138,7 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
             </select>
           </div>
 
-          {/* C. 加油與洗車勾選 (保留功能並優化 UI) */}
+          {/* C. 加油與洗車勾選 */}
           <div className="grid grid-cols-2 gap-4">
             <label className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all border-2 border-transparent has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50">
               <div className="flex items-center gap-3">
@@ -190,7 +197,7 @@ export default function LogForm({ vehicle, user, onSuccess, onCancel }: any) {
           </div>
         </div>
 
-        {/* E. 底部提交區 */}
+        {/* E. 底部提交按鈕 */}
         <div className="p-10 bg-slate-50/50 border-t border-slate-100">
           <button 
             disabled={loading}
