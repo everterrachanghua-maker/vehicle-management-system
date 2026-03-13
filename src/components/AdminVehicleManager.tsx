@@ -14,7 +14,8 @@ export default function AdminVehicleManager() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // 用於新增
+  const [isUpdating, setIsUpdating] = useState(false);   // 用於編輯
   
   // 編輯相關狀態
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
@@ -37,7 +38,7 @@ export default function AdminVehicleManager() {
     return await getDownloadURL(storageRef);
   };
 
-  // 2. 新增車輛邏輯
+  // 2. 新增車輛邏輯 (整合圖片上傳)
   const handleAddVehicle = async (e: any) => {
     e.preventDefault();
     setIsUploading(true);
@@ -73,20 +74,36 @@ export default function AdminVehicleManager() {
     }
   };
 
-  // 3. 更新車輛資料邏輯
+  // 3. 更新車輛資料邏輯 (整合編輯圖片上傳)
   const handleUpdateVehicle = async (e: any) => {
     e.preventDefault();
-    const { id, name, plate, initialOdo } = editingVehicle;
+    setIsUpdating(true);
+    
+    const { id, name, plate, initialOdo, imgUrl } = editingVehicle;
+    const newPhotoFile = e.target.edit_photo?.files[0];
+
     try {
+      let finalImgUrl = imgUrl; // 預設使用原本網址
+
+      // 如果編輯時有選擇新照片
+      if (newPhotoFile) {
+        finalImgUrl = await handleFileUpload(newPhotoFile, plate);
+      }
+
       await updateDoc(doc(db, "vehicles", id), {
         name,
         plate: plate.toUpperCase(),
-        initialOdo: Number(initialOdo)
+        initialOdo: Number(initialOdo),
+        imgUrl: finalImgUrl
       });
+      
       setEditingVehicle(null);
-      alert("車輛資料已更新");
+      alert("車輛資料已成功更新");
     } catch (err) {
+      console.error(err);
       alert("更新失敗");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -256,7 +273,26 @@ export default function AdminVehicleManager() {
               <h3 className="font-bold">編輯車輛資訊</h3>
               <button type="button" onClick={() => setEditingVehicle(null)} className="hover:text-slate-300"><X size={20}/></button>
             </div>
+            
             <div className="p-8 space-y-4">
+              {/* 編輯圖片區 */}
+              <div className="flex flex-col items-center gap-3 mb-4">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-slate-200 overflow-hidden flex items-center justify-center">
+                    {editingVehicle.imgUrl ? (
+                      <img src={editingVehicle.imgUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <Car size={32} className="text-slate-200" />
+                    )}
+                  </div>
+                  <label htmlFor="edit_photo" className="absolute -bottom-2 -right-2 w-8 h-8 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg cursor-pointer hover:bg-emerald-600 transition-all border-2 border-white">
+                    <Camera size={14} />
+                  </label>
+                  <input name="edit_photo" type="file" accept="image/*" className="hidden" id="edit_photo" />
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">更換資產照片</p>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase">車名/型號</label>
                 <input value={editingVehicle.name} onChange={e => setEditingVehicle({...editingVehicle, name: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-2 ring-emerald-500 font-bold" required />
@@ -269,8 +305,12 @@ export default function AdminVehicleManager() {
                 <label className="text-[10px] font-black text-slate-400 uppercase">最初里程 (KM)</label>
                 <input type="number" value={editingVehicle.initialOdo} onChange={e => setEditingVehicle({...editingVehicle, initialOdo: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-2 ring-emerald-500 font-mono" required />
               </div>
-              <button className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 mt-4 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
-                <Save size={20} /> 儲存變更
+              
+              <button 
+                disabled={isUpdating}
+                className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 mt-4 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-70"
+              >
+                {isUpdating ? <Loader2 className="animate-spin" /> : <><Save size={20} /> 儲存變更</>}
               </button>
             </div>
           </form>
@@ -289,7 +329,7 @@ function InputGroup({ label, name, placeholder, type = "text" }: any) {
         name={name} 
         type={type} 
         placeholder={placeholder} 
-        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 ring-emerald-500 font-bold transition-all placeholder:text-slate-300" 
+        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 ring-emerald-500 font-bold transition-all placeholder:text-slate-300 text-sm" 
         required 
       />
     </div>
