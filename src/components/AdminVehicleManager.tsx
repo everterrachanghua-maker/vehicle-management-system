@@ -37,7 +37,7 @@ export default function AdminVehicleManager() {
     if (!contract || contract === 0) return "bg-white hover:bg-slate-50";
     const ratio = current / contract;
     if (ratio >= 1) return "bg-red-50 hover:bg-red-100/80";
-    if (ratio >= 0.9) return "bg-orange-50 hover:bg-orange-100/80";
+    if (ratio >= 0.9) return "bg-orange-100 hover:bg-orange-100/80";
     if (ratio >= 0.7) return "bg-amber-50 hover:bg-amber-100/80";
     return "bg-white hover:bg-slate-50";
   };
