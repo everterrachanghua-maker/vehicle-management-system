@@ -14,10 +14,9 @@ export default function AdminVehicleManager() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false); // 用於新增
-  const [isUpdating, setIsUpdating] = useState(false);   // 用於編輯
+  const [isUploading, setIsUploading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   
-  // 編輯相關狀態
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
 
   // 1. 監聽數據 (實時同步)
@@ -38,7 +37,7 @@ export default function AdminVehicleManager() {
     return await getDownloadURL(storageRef);
   };
 
-  // 2. 新增車輛邏輯 (整合圖片上傳)
+  // 2. 新增車輛邏輯
   const handleAddVehicle = async (e: any) => {
     e.preventDefault();
     setIsUploading(true);
@@ -74,33 +73,27 @@ export default function AdminVehicleManager() {
     }
   };
 
-  // 3. 更新車輛資料邏輯 (整合編輯圖片上傳)
+  // 3. 更新車輛資料邏輯
   const handleUpdateVehicle = async (e: any) => {
     e.preventDefault();
     setIsUpdating(true);
-    
     const { id, name, plate, initialOdo, imgUrl } = editingVehicle;
     const newPhotoFile = e.target.edit_photo?.files[0];
 
     try {
-      let finalImgUrl = imgUrl; // 預設使用原本網址
-
-      // 如果編輯時有選擇新照片
+      let finalImgUrl = imgUrl;
       if (newPhotoFile) {
         finalImgUrl = await handleFileUpload(newPhotoFile, plate);
       }
-
       await updateDoc(doc(db, "vehicles", id), {
         name,
         plate: plate.toUpperCase(),
         initialOdo: Number(initialOdo),
         imgUrl: finalImgUrl
       });
-      
       setEditingVehicle(null);
       alert("車輛資料已成功更新");
     } catch (err) {
-      console.error(err);
       alert("更新失敗");
     } finally {
       setIsUpdating(false);
@@ -136,7 +129,7 @@ export default function AdminVehicleManager() {
             </div>
           </div>
           <InputGroup label="車名/型號" name="name" placeholder="Toyota Cross" />
-          <InputGroup label="車牌號碼" name="plate" placeholder="RFY-9731" />
+          <InputGroup label="車牌號碼" name="plate" placeholder="ABC-1234" />
           <InputGroup label="最初里程 (KM)" name="odo" type="number" placeholder="0" />
           <button disabled={isUploading} className={`bg-[#0f172a] text-white h-[52px] rounded-2xl font-bold transition-all shadow-lg shadow-slate-200 flex items-center justify-center ${isUploading ? 'opacity-70' : 'hover:bg-slate-800'}`}>
             {isUploading ? <Loader2 className="animate-spin" /> : "確認入庫"}
@@ -213,37 +206,55 @@ export default function AdminVehicleManager() {
                       </td>
                     </tr>
 
-                    {/* 下拉細節 */}
+                    {/* 下拉展開：該車的所有出勤填報細節 (優化後) */}
                     {isExpanded && (
                       <tr>
                         <td colSpan={8} className="p-0 bg-slate-50/50 border-b">
-                          <div className="m-6 bg-white rounded-2xl border border-slate-200 shadow-inner overflow-hidden">
+                          <div className="m-6 bg-white rounded-2xl border border-slate-200 shadow-inner overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
                             <table className="w-full text-xs text-left">
                               <thead className="bg-slate-50/50 text-slate-400 font-bold border-b">
                                 <tr>
-                                  <th className="px-6 py-3">日期</th>
+                                  <th className="px-6 py-3">日期 / 時間</th>
                                   <th className="px-6 py-3">填報人</th>
+                                  <th className="px-6 py-3 text-center">工作地點</th>
                                   <th className="px-6 py-3 text-center">里程 (起 → 止)</th>
-                                  <th className="px-6 py-3 text-center">單次公里</th>
-                                  <th className="px-6 py-3 text-center">維護項目</th>
-                                  <th className="px-6 py-3 text-right">管理</th>
+                                  <th className="px-6 py-3 text-center">單次里程</th>
+                                  <th className="px-6 py-3 text-center">狀況</th>
+                                  <th className="px-6 py-3 text-right">操作</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {vRecords.length === 0 ? (
-                                  <tr><td colSpan={6} className="p-8 text-center text-slate-300 italic">尚無行駛紀錄</td></tr>
+                                  <tr><td colSpan={7} className="p-8 text-center text-slate-300 italic">尚未有行駛紀錄</td></tr>
                                 ) : (
                                   vRecords.map(rec => (
-                                    <tr key={rec.id}>
-                                      <td className="px-6 py-4 text-slate-500 font-mono">{rec.date}</td>
+                                    <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
+                                      <td className="px-6 py-4">
+                                        <p className="font-bold text-slate-700">{rec.date}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono">{rec.time || '--:--'}</p>
+                                      </td>
                                       <td className="px-6 py-4 font-bold text-slate-700">{rec.userName}</td>
-                                      <td className="px-6 py-4 text-center font-mono"><span className="text-slate-400">{rec.startOdo}</span> → <span className="font-bold text-indigo-600">{rec.endOdo}</span></td>
-                                      <td className="px-6 py-4 text-center font-black text-emerald-600">{rec.mileageDiff} km</td>
                                       <td className="px-6 py-4 text-center">
-                                        <div className="flex justify-center gap-2">
-                                          {rec.hasFuel && <Fuel size={14} className="text-orange-500" />}
-                                          {rec.hasWash && <Droplets size={14} className="text-blue-500" />}
-                                        </div>
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg font-bold text-[10px]">
+                                          {rec.location || '未標註'}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center font-mono text-[11px]">
+                                        <span className="text-slate-400">{rec.startOdo}</span>
+                                        <span className="mx-2 text-slate-300">→</span>
+                                        <span className="font-black text-indigo-600">{rec.endOdo}</span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center font-black text-emerald-600">
+                                        {rec.mileageDiff} <span className="text-[9px] font-normal text-slate-400 uppercase">km</span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center">
+                                        {rec.hasAbnormality ? (
+                                          <span className="text-rose-500 font-black text-[10px] border border-rose-200 bg-rose-50 px-2 py-0.5 rounded-md">
+                                            異常
+                                          </span>
+                                        ) : (
+                                          <span className="text-emerald-500 font-bold text-[10px]">正常</span>
+                                        )}
                                       </td>
                                       <td className="px-6 py-4 text-right">
                                         <button onClick={() => handleDeleteRecord(rec.id)} className="text-slate-300 hover:text-rose-400"><Trash2 size={14}/></button>
@@ -275,7 +286,6 @@ export default function AdminVehicleManager() {
             </div>
             
             <div className="p-8 space-y-4">
-              {/* 編輯圖片區 */}
               <div className="flex flex-col items-center gap-3 mb-4">
                 <div className="relative group">
                   <div className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-slate-200 overflow-hidden flex items-center justify-center">
@@ -320,7 +330,7 @@ export default function AdminVehicleManager() {
   );
 }
 
-// 輔助組件：輸入框
+// 輔助組件
 function InputGroup({ label, name, placeholder, type = "text" }: any) {
   return (
     <div className="space-y-2">
