@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from '../lib/firebase'; 
+import { db } from '../lib/firebase'; 
 import { 
   collection, addDoc, onSnapshot, query, orderBy, 
   doc, updateDoc, deleteDoc 
@@ -17,12 +17,12 @@ export default function AdminVehicleManager() {
   const [isUploading, setIsUploading] = useState(false); 
   const [isUpdating, setIsUpdating] = useState(false);   
   
-  // 編輯與預覽狀態
-  const [editingVehicle, setEditingVehicle] = useState<any>(null); // 編輯車輛
-  const [editingRecord, setEditingRecord] = useState<any>(null);   // 編輯填報紀錄
+  // 編輯狀態
+  const [editingVehicle, setEditingVehicle] = useState<any>(null); 
+  const [editingRecord, setEditingRecord] = useState<any>(null);   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // 1. 監聽數據 (實時同步)
+  // 1. 監聽數據
   useEffect(() => {
     const unsubV = onSnapshot(collection(db, "vehicles"), (snap) => {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -33,17 +33,17 @@ export default function AdminVehicleManager() {
     return () => { unsubV(); unsubR(); };
   }, []);
 
-  // --- 邏輯功能：里程背景顏色判定 ---
+  // 變色邏輯
   const getRowBgColor = (current: number, contract: number) => {
-    if (!contract || contract === 0) return "bg-white hover:bg-slate-50";
+    if (!contract || contract === 0) return "bg-white";
     const ratio = current / contract;
-    if (ratio >= 1) return "bg-red-100";     // 100% 以上：淺紅色
-    if (ratio >= 0.9) return "bg-orange-100"; // 90% 以上：淺橘色
-    if (ratio >= 0.7) return "bg-amber-100";  // 70% 以上：淺黃色
-    return "bg-white hover:bg-slate-50";
+    if (ratio >= 1) return "bg-red-50";
+    if (ratio >= 0.9) return "bg-orange-50";
+    if (ratio >= 0.7) return "bg-amber-50";
+    return "bg-white";
   };
 
-  // --- 邏輯功能：圖片壓縮 ---
+  // 圖片處理邏輯
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -88,7 +88,7 @@ export default function AdminVehicleManager() {
     }
   };
 
-  // --- 2. 新增車輛邏輯 ---
+  // 新增車輛
   const handleAddVehicle = async (e: any) => {
     e.preventDefault();
     setIsUploading(true);
@@ -114,7 +114,7 @@ export default function AdminVehicleManager() {
     } catch (err) { alert("新增失敗"); } finally { setIsUploading(false); }
   };
 
-  // --- 3. 更新車輛邏輯 ---
+  // 更新車輛
   const handleUpdateVehicle = async (e: any) => {
     e.preventDefault();
     setIsUpdating(true);
@@ -137,7 +137,7 @@ export default function AdminVehicleManager() {
     } catch (err) { alert("更新失敗"); } finally { setIsUpdating(false); }
   };
 
-  // --- 4. 修改填報紀錄邏輯 (修正填錯的功能) ---
+  // 修正填報紀錄 (核心功能)
   const handleUpdateRecord = async (e: any) => {
     e.preventDefault();
     const { id, startOdo, endOdo, location, userName, date, time } = editingRecord;
@@ -162,11 +162,11 @@ export default function AdminVehicleManager() {
 
   return (
     <div className="space-y-8 pb-20">
-      {/* --- 頂部：新增車輛區 --- */}
+      {/* 新增車輛區 */}
       <section className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 mb-6 text-slate-800">
           <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center"><PlusCircle size={24} /></div>
-          <h2 className="text-xl font-bold">資產入庫設定</h2>
+          <h2 className="text-xl font-bold text-slate-800">資產入庫設定</h2>
         </div>
         <form onSubmit={handleAddVehicle} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div className="space-y-2 text-center">
@@ -182,13 +182,13 @@ export default function AdminVehicleManager() {
           <InputGroup label="車牌號碼" name="plate" placeholder="ABC-1234" />
           <InputGroup label="最初里程" name="odo" type="number" placeholder="0" />
           <InputGroup label="年度合約里程" name="contractOdo" type="number" placeholder="20000" />
-          <button disabled={isUploading} className="bg-[#0f172a] text-white h-[52px] rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center">
+          <button disabled={isUploading} className="bg-[#0f172a] text-white h-[52px] rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center">
             {isUploading ? <Loader2 className="animate-spin" /> : "確認入庫"}
           </button>
         </form>
       </section>
 
-      {/* --- 中間：資產清單 --- */}
+      {/* 資產清單 */}
       <section className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b bg-slate-50/50 flex justify-between items-center">
           <h3 className="font-bold text-slate-500 text-sm uppercase tracking-widest">車輛資產管理清單</h3>
@@ -220,7 +220,7 @@ export default function AdminVehicleManager() {
 
                 return (
                   <React.Fragment key={v.id}>
-                    <tr className={`${rowBgColor} transition-colors duration-300 group`}>
+                    <tr className={`${rowBgColor} transition-colors duration-300`}>
                       <td className="px-6 py-5 text-center">
                         <button onClick={() => setExpandedId(isExpanded ? null : v.id)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200">
                           {isExpanded ? <ChevronUp size={16} className="text-emerald-500" /> : <ChevronDown size={16} className="text-slate-400" />}
@@ -245,9 +245,9 @@ export default function AdminVehicleManager() {
                           <option value="maintenance">維修中</option>
                         </select>
                       </td>
-                      <td className="px-6 py-5 text-right space-x-2 text-slate-300">
-                        <button onClick={() => setEditingVehicle(v)} className="p-2 hover:bg-white hover:text-emerald-600 rounded-lg transition-all"><Edit3 size={16} /></button>
-                        <button onClick={async () => {if(confirm("確定刪除此車輛？")) await deleteDoc(doc(db, "vehicles", v.id))}} className="p-2 hover:bg-white hover:text-rose-500 rounded-lg transition-all"><Trash2 size={16} /></button>
+                      <td className="px-6 py-5 text-right space-x-2">
+                        <button onClick={() => setEditingVehicle(v)} className="p-2 bg-white/50 text-slate-400 hover:text-emerald-600 rounded-lg shadow-sm border border-slate-100 transition-all"><Edit3 size={16} /></button>
+                        <button onClick={async () => {if(confirm("確定刪除此車輛？")) await deleteDoc(doc(db, "vehicles", v.id))}} className="p-2 bg-white/50 text-slate-400 hover:text-rose-500 rounded-lg shadow-sm border border-slate-100 transition-all"><Trash2 size={16} /></button>
                       </td>
                     </tr>
 
@@ -270,18 +270,17 @@ export default function AdminVehicleManager() {
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {vRecords.map(rec => (
-                                  <tr key={rec.id} className="hover:bg-slate-50 transition-colors group">
+                                  <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4"><p className="font-bold text-slate-700">{rec.date}</p><p className="text-[10px] text-slate-400 font-mono">{rec.time || '--:--'}</p></td>
                                     <td className="px-6 py-4 font-bold text-slate-700">{rec.userName}</td>
                                     <td className="px-6 py-4 text-center"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg font-bold text-[10px]">{rec.location || '未標註'}</span></td>
                                     <td className="px-6 py-4 text-center font-mono text-[11px]"><span className="text-slate-400">{rec.startOdo}</span> → <span className="font-black text-indigo-600">{rec.endOdo}</span></td>
                                     <td className="px-6 py-4 text-center font-black text-emerald-600">+{rec.mileageDiff} km</td>
                                     <td className="px-6 py-4 text-center">{rec.hasAbnormality ? <span className="text-rose-500 font-black text-[10px] border border-rose-200 bg-rose-50 px-2 py-0.5 rounded-md">異常</span> : <span className="text-emerald-500 font-bold text-[10px]">正常</span>}</td>
-                                    <td className="px-6 py-4 text-right">
-                                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => setEditingRecord(rec)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"><Edit3 size={14}/></button>
-                                          <button onClick={() => handleDeleteRecord(rec.id)} className="p-1.5 bg-slate-100 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={14}/></button>
-                                       </div>
+                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                      {/* 這裡就是您要求的編輯紀錄按鈕 */}
+                                      <button onClick={() => setEditingRecord(rec)} className="p-2 bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="編輯紀錄"><Edit3 size={16}/></button>
+                                      <button onClick={() => handleDeleteRecord(rec.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="刪除紀錄"><Trash2 size={16}/></button>
                                     </td>
                                   </tr>
                                 ))}
@@ -299,16 +298,16 @@ export default function AdminVehicleManager() {
         </div>
       </section>
 
-      {/* --- 彈窗 1：編輯車輛 --- */}
+      {/* 彈窗 1：編輯車輛 */}
       {editingVehicle && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-          <form onSubmit={handleUpdateVehicle} className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleUpdateVehicle} className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden">
             <div className="p-8 bg-[#0f172a] text-white flex justify-between items-center">
               <h3 className="text-xl font-bold">編輯車輛資訊</h3>
               <button type="button" onClick={() => setEditingVehicle(null)}><X size={24}/></button>
             </div>
             <div className="p-8 space-y-6">
-              <div className="flex flex-col items-center gap-4 py-2">
+              <div className="flex flex-col items-center gap-4">
                 <div className="relative group">
                   <div className="w-28 h-28 rounded-[28px] bg-slate-50 border-2 border-slate-200 overflow-hidden flex items-center justify-center shadow-inner">
                     {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" /> : (editingVehicle.imgUrl ? <img src={editingVehicle.imgUrl} className="w-full h-full object-cover" /> : <Car size={40} className="text-slate-200" />)}
@@ -325,7 +324,7 @@ export default function AdminVehicleManager() {
                   <InputGroup label="合約里程" type="number" value={editingVehicle.contractOdo} onChange={(e:any)=>setEditingVehicle({...editingVehicle, contractOdo: e.target.value})} />
                 </div>
               </div>
-              <button disabled={isUpdating} className="w-full bg-emerald-600 text-white py-5 rounded-[24px] font-black text-lg shadow-xl flex items-center justify-center gap-3 mt-4">
+              <button disabled={isUpdating} className="w-full bg-emerald-600 text-white py-5 rounded-[24px] font-black text-lg shadow-xl flex items-center justify-center gap-3">
                 {isUpdating ? <Loader2 className="animate-spin" /> : <><Save size={24} /> 儲存變更</>}
               </button>
             </div>
@@ -333,11 +332,11 @@ export default function AdminVehicleManager() {
         </div>
       )}
 
-      {/* --- 彈窗 2：編輯填報紀錄 --- */}
+      {/* 彈窗 2：編輯填報紀錄 */}
       {editingRecord && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <form onSubmit={handleUpdateRecord} className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="p-6 bg-[#0f172a] text-white flex justify-between items-center">
+             <div className="p-6 bg-[#0f172a] text-white flex justify-between items-center text-sm">
                 <h3 className="font-bold flex items-center gap-2"><Edit3 size={18}/> 修正填報紀錄</h3>
                 <button type="button" onClick={() => setEditingRecord(null)}><X size={24}/></button>
              </div>
@@ -354,7 +353,7 @@ export default function AdminVehicleManager() {
                    <InputGroup label="起始里程" type="number" value={editingRecord.startOdo} onChange={(e:any)=>setEditingRecord({...editingRecord, startOdo: e.target.value})} />
                    <InputGroup label="結束里程" type="number" value={editingRecord.endOdo} onChange={(e:any)=>setEditingRecord({...editingRecord, endOdo: e.target.value})} />
                 </div>
-                <button className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl mt-4">確認修正內容</button>
+                <button className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl mt-4">確認修正內容</button>
              </div>
           </form>
         </div>
